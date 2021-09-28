@@ -91,11 +91,13 @@ def tokenized_dataset(dataset, tokenizer):
   sen_data = [preprocess_sen(sen).strip() for sen in dataset['sentence']]
 
   
+  print('-'*100)
+  print(f'UNK token counting....')
   unk_idx = tokenizer.get_vocab()['[UNK]']
   UNK_cnt = 0
-  for sen in dataset['sentence'] :
+  for sen in tqdm(dataset['sentence']) :
     UNK_cnt += tokenizer.encode(sen).count(unk_idx)
-  print('-'*100)
+  sleep(0.01)
   print(f'UNK token count is :{UNK_cnt} in {tokenizer.name_or_path}')
   print('-'*100)
   sleep(3)

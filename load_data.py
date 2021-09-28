@@ -1,5 +1,6 @@
 import pickle as pickle
 import os
+import re
 import pandas as pd
 import collections
 import random
@@ -57,17 +58,23 @@ def preprocessing_dataset(dataset):
   for i,j in zip(dataset['subject_entity'], dataset['object_entity']):
     i = i[1:-1].split(',')[0].split(':')[1]
     j = j[1:-1].split(',')[0].split(':')[1]
-
+    i = re.sub('[\']', '' , i)
+    j = re.sub('[\']', '' , j)
+        
     subject_entity.append(i)
     object_entity.append(j)
-  out_dataset = pd.DataFrame({'id':dataset['id'], 'sentence':dataset['sentence'],'subject_entity':subject_entity,'object_entity':object_entity,'label':dataset['label'],})
+
+  out_dataset = pd.DataFrame({'id':dataset['id'], 
+    'sentence':dataset['sentence'],
+    'subject_entity':subject_entity,
+    'object_entity':object_entity,
+    'label':dataset['label'],})
   return out_dataset
 
 def load_data(dataset_dir):
   """ csv 파일을 경로에 맡게 불러 옵니다. """
   pd_dataset = pd.read_csv(dataset_dir)
   dataset = preprocessing_dataset(pd_dataset)
-  
   return dataset
 
 def tokenized_dataset(dataset, tokenizer):
@@ -79,16 +86,16 @@ def tokenized_dataset(dataset, tokenizer):
     concat_entity.append(temp)
 
   print('Preprocess Text Data')
-  sen_list = list(dataset['sentence'])
-  sen_list = [preprocess_sen(sen) for sen in tqdm(sen_list)]
+  entiy_list = [preprocess_sen(entity) for entity in tqdm(concat_entity)]
+  sen_list = [preprocess_sen(sen) for sen in tqdm(list(dataset['sentence']))]
 
   tokenized_sentences = tokenizer(
       concat_entity,
       sen_list,
       return_tensors="pt",
-      padding=True,
       truncation=True,
       max_length=256,
       add_special_tokens=True,
-      )
+    )
+
   return tokenized_sentences

@@ -79,23 +79,25 @@ def load_data(dataset_dir):
 
 def tokenized_dataset(dataset, tokenizer):
   """ tokenizer에 따라 sentence를 tokenizing 합니다."""
-  concat_entity = []
-  for e01, e02 in zip(dataset['subject_entity'], dataset['object_entity']):
-    temp = ''
-    temp = e01 + '[SEP]' + e02
-    concat_entity.append(temp)
+  re_data = []
+  data_size = len(dataset)
+  for i in range(data_size) :
+    sub = dataset['subject_entity'][i]
+    obj = dataset['object_entity'][i]
+    sen = dataset['sentence'][i]
+
+    re_sen = sub + ' [SEP] ' + obj + ' [SEP] ' + sen
+    re_data.append(re_sen)
 
   print('Preprocess Text Data')
-  entiy_list = [preprocess_sen(entity) for entity in tqdm(concat_entity)]
-  sen_list = [preprocess_sen(sen) for sen in tqdm(list(dataset['sentence']))]
+  re_sen = [preprocess_sen(sen) for sen in tqdm(re_data)]
 
   tokenized_sentences = tokenizer(
-      concat_entity,
-      sen_list,
-      return_tensors="pt",
-      truncation=True,
-      max_length=256,
-      add_special_tokens=True,
-    )
+    re_sen,
+    return_tensors="pt",
+    truncation=True,
+    padding=True,
+    max_length=256,
+  )
 
   return tokenized_sentences

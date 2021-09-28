@@ -8,7 +8,6 @@ from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_sc
 from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer
 from load_data import *
 
-## BJ
 import argparse
 from pathlib import Path
 
@@ -75,24 +74,21 @@ def label_to_num(label):
 
 def train(args):
   # load model and tokenizer
-  # MODEL_NAME = "bert-base-uncased"
   MODEL_NAME = args.PLM
   tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
   # load dataset
   train_dataset = load_data("../dataset/train/train.csv")
-  # dev_dataset = load_data("../dataset/train/dev.csv") # validation용 데이터는 따로 만드셔야 합니다.
-
   train_label = label_to_num(train_dataset['label'].values)
-  # dev_label = label_to_num(dev_dataset['label'].values)
-
+  
+   
   # tokenizing dataset
-  tokenized_train = tokenized_dataset(train_dataset, tokenizer)
-  # tokenized_dev = tokenized_dataset(dev_dataset, tokenizer)
+  tokenized_train = tokenized_dataset(train_dataset, tokenizer) # UNK token count
 
   # make dataset for pytorch.
-  RE_train_dataset = RE_Dataset(tokenized_train, train_label)
-  # RE_dev_dataset = RE_Dataset(tokenized_dev, dev_label)
+  
+  RE_train_dataset = RE_Dataset(tokenized_train, train_label).split()[0]
+  RE_dev_dataset = RE_Dataset(tokenized_train, train_label).split()[1]
 
   device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -124,7 +120,7 @@ def train(args):
                                 # `no`: No evaluation during training.
                                 # `steps`: Evaluate every `eval_steps`.
                                 # `epoch`: Evaluate every end of epoch.
-    eval_steps = 100,            # evaluation step.
+    eval_steps = 500,            # evaluation step.
     load_best_model_at_end = True,
     report_to="wandb"
   )
@@ -133,7 +129,7 @@ def train(args):
     model=model,                         # the instantiated 🤗 Transformers model to be trained
     args=training_args,                  # training arguments, defined above
     train_dataset=RE_train_dataset,         # training dataset
-    eval_dataset=RE_train_dataset,             # evaluation dataset
+    eval_dataset=RE_dev_dataset,             # evaluation dataset
     compute_metrics=compute_metrics         # define metrics function
   )
 
@@ -171,7 +167,7 @@ if __name__ == '__main__':
   ## Data and model checkpoints directories
   parser.add_argument('--dir_name', default='exp', help='model save at {SM_SAVE_DIR}/{name}')
   parser.add_argument('--PLM', type=str, default='klue/bert-base', help='model type (default: klue/bert-base)')
-  parser.add_argument('--epochs', type=int, default=20, help='number of epochs to train (default: 20)')
+  parser.add_argument('--epochs', type=int, default=3, help='number of epochs to train (default: 3)')
   parser.add_argument('--lr', type=float, default=5e-5, help='learning rate (default: 5e-5)')
   parser.add_argument('--train_batch_size', type=int, default=16, help='train batch size (default: 16)')
   parser.add_argument('--eval_batch_size', type=int, default=16, help='eval batch size (default: 16)')

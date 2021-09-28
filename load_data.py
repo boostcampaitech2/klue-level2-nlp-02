@@ -9,6 +9,8 @@ from tqdm import tqdm
 from torch.utils.data import Dataset, Subset
 from preprocessor import *
 
+from time import sleep
+
 class RE_Dataset(Dataset):
   """ Dataset 구성을 위한 class."""
   def __init__(self, pair_dataset, labels, val_size=20):
@@ -88,6 +90,16 @@ def tokenized_dataset(dataset, tokenizer):
   concat_entity = [preprocess_sen(entity).strip() for entity in concat_entity]
   sen_data = [preprocess_sen(sen).strip() for sen in dataset['sentence']]
 
+  
+  unk_idx = tokenizer.get_vocab()['[UNK]']
+  UNK_cnt = 0
+  for sen in dataset['sentence'] :
+    UNK_cnt += tokenizer.encode(sen).count(unk_idx)
+  print('-'*100)
+  print(f'UNK token count is :{UNK_cnt} in {tokenizer.name_or_path}')
+  print('-'*100)
+  sleep(3)
+  
   tokenized_sentences = tokenizer(
     concat_entity,
     sen_data,

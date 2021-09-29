@@ -104,19 +104,25 @@ def tokenized_dataset(dataset, tokenizer):
   
   """ Roberta TTI_flag """
   if 'roberta' in tokenizer.name_or_path and not 'xlm' in tokenizer.name_or_path:
-    TTI_flag = False
+    tokenized_sentences = tokenizer(
+      concat_entity,
+      sen_data,
+      return_tensors="pt",
+      padding=True,
+      truncation=True,
+      max_length=256,
+      add_special_tokens=True,
+      return_token_type_ids=False
+    )
   else :
-    TTI_flag = True
-
-  tokenized_sentences = tokenizer(
-    concat_entity,
-    sen_data,
-    return_tensors="pt",
-    padding=True,
-    truncation=True,
-    max_length=256,
-    add_special_tokens=True,
-    return_token_type_ids=TTI_flag
-  )
+    tokenized_sentences = tokenizer(
+      concat_entity,
+      sen_data,
+      return_tensors="pt",
+      padding=True,
+      truncation=True,
+      max_length=256,
+      add_special_tokens=True
+    )
 
   return tokenized_sentences

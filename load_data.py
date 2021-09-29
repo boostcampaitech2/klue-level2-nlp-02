@@ -90,18 +90,6 @@ def tokenized_dataset(dataset, tokenizer):
   concat_entity = [preprocess_sen(entity).strip() for entity in concat_entity]
   sen_data = [preprocess_sen(sen).strip() for sen in dataset['sentence']]
 
-  """ UNK token counting """
-  print('-'*100)
-  print(f'{tokenizer.unk_token} token processing...')
-  unk_idx = tokenizer.get_vocab()[tokenizer.unk_token]
-  UNK_cnt = 0
-  for sen in tqdm(dataset['sentence']) :
-    UNK_cnt += tokenizer.encode(sen).count(unk_idx)
-  sleep(0.01)
-  print(f'UNK token count is :{UNK_cnt} in {tokenizer.name_or_path}')
-  print('-'*100)
-  sleep(3)
-  
   """ Roberta TTI_flag """
   if 'roberta' in tokenizer.name_or_path and not 'xlm' in tokenizer.name_or_path:
     tokenized_sentences = tokenizer(

@@ -87,8 +87,7 @@ def train(args):
 
   # make dataset for pytorch.
   
-  RE_train_dataset = RE_Dataset(tokenized_train, train_label).split()[0]
-  RE_dev_dataset = RE_Dataset(tokenized_train, train_label).split()[1]
+  RE_train_dataset, RE_dev_dataset = RE_Dataset(tokenized_train, train_label).split()
 
   device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 

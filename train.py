@@ -78,16 +78,16 @@ def train(args):
   tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
   # load dataset
-  train_dataset = load_data("../dataset/train/train.csv")
+  train_dataset = load_data("/opt/ml/dataset/train/train.csv")
   train_label = label_to_num(train_dataset['label'].values)
   
-   
   # tokenizing dataset
   tokenized_train = tokenized_dataset(train_dataset, tokenizer) # UNK token count
+  RE_train_dataset = RE_Dataset(tokenized_train, train_label, args.eval_ratio)
 
-  # make dataset for pytorch.
-  
-  RE_train_dataset, RE_dev_dataset = RE_Dataset(tokenized_train, train_label).split()
+  # Split validation dataset
+  if args.eval_flag == True :
+    RE_train_dataset, RE_dev_dataset = RE_train_dataset.split()
 
   device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -103,34 +103,66 @@ def train(args):
   
   # 사용한 option 외에도 다양한 option들이 있습니다.
   # https://huggingface.co/transformers/main_classes/trainer.html#trainingarguments 참고해주세요.
-  training_args = TrainingArguments(
-    output_dir='./results',          # output directory
-    save_total_limit=5,              # number of total save model.
-    save_steps=500,                 # model saving step.
-    num_train_epochs=args.epochs,              # total number of training epochs
-    learning_rate=args.lr,               # learning_rate
-    per_device_train_batch_size=args.train_batch_size,  # batch size per device during training
-    per_device_eval_batch_size=args.eval_batch_size,   # batch size for evaluation
-    warmup_steps=args.warmup_steps,                # number of warmup steps for learning rate scheduler
-    weight_decay=args.weight_decay,               # strength of weight decay
-    logging_dir='./logs',            # directory for storing logs
-    logging_steps=100,              # log saving step.
-    evaluation_strategy=args.evaluation_strategy, # evaluation strategy to adopt during training
-                                # `no`: No evaluation during training.
-                                # `steps`: Evaluate every `eval_steps`.
-                                # `epoch`: Evaluate every end of epoch.
-    eval_steps = 500,            # evaluation step.
-    load_best_model_at_end = True,
-    report_to="wandb"
-  )
 
-  trainer = Trainer(
-    model=model,                         # the instantiated 🤗 Transformers model to be trained
-    args=training_args,                  # training arguments, defined above
-    train_dataset=RE_train_dataset,         # training dataset
-    eval_dataset=RE_dev_dataset,             # evaluation dataset
-    compute_metrics=compute_metrics         # define metrics function
-  )
+  if args.eval_flag == True :
+    training_args = TrainingArguments(
+      output_dir='./results',          # output directory
+      save_total_limit=5,              # number of total save model.
+      save_steps=500,                  # model saving step.
+      num_train_epochs=args.epochs,              # total number of training epochs
+      learning_rate=args.lr,                     # learning_rate
+      per_device_train_batch_size=args.train_batch_size,  # batch size per device during training
+      per_device_eval_batch_size=args.eval_batch_size,    # batch size for evaluation
+      warmup_steps=args.warmup_steps,                # number of warmup steps for learning rate scheduler
+      weight_decay=args.weight_decay,                # strength of weight decay
+      logging_dir='./logs',            # directory for storing logs
+      logging_steps=100,               # log saving step.
+      evaluation_strategy=args.evaluation_strategy, # evaluation strategy to adopt during training
+                                  # `no`: No evaluation during training.
+                                  # `steps`: Evaluate every `eval_steps`.
+                                  # `epoch`: Evaluate every end of epoch.
+      eval_steps = 500,           # evaluation step.
+      load_best_model_at_end = True,
+      report_to="wandb"
+    )
+    trainer = Trainer(
+      model=model,                         # the instantiated 🤗 Transformers model to be trained
+      args=training_args,                  # training arguments, defined above
+      train_dataset=RE_train_dataset,         # training dataset
+      eval_dataset=RE_dev_dataset,             # evaluation dataset
+      compute_metrics=compute_metrics         # define metrics function
+    )
+
+  else :
+    training_args = TrainingArguments(
+      output_dir='./results',          # output directory
+      save_total_limit=5,              # number of total save model.
+      save_steps=500,                  # model saving step.
+      num_train_epochs=args.epochs,              # total number of training epochs
+      learning_rate=args.lr,                     # learning_rate
+      per_device_train_batch_size=args.train_batch_size,  # batch size per device during training
+      per_device_eval_batch_size=args.eval_batch_size,    # batch size for evaluation
+      warmup_steps=args.warmup_steps,                # number of warmup steps for learning rate scheduler
+      weight_decay=args.weight_decay,                # strength of weight decay
+      logging_dir='./logs',            # directory for storing logs
+      logging_steps=100,               # log saving step.
+      evaluation_strategy=args.evaluation_strategy, # evaluation strategy to adopt during training
+                                  # `no`: No evaluation during training.
+                                  # `steps`: Evaluate every `eval_steps`.
+                                  # `epoch`: Evaluate every end of epoch.
+      eval_steps = 500,           # evaluation step.
+      load_best_model_at_end = True,
+      report_to="wandb"
+    )
+    trainer = Trainer(
+      model=model,                         # the instantiated 🤗 Transformers model to be trained
+      args=training_args,                  # training arguments, defined above
+      train_dataset=RE_train_dataset,         # training dataset
+      eval_dataset=RE_train_dataset,             # evaluation dataset
+      compute_metrics=compute_metrics         # define metrics function
+    )
+
+
 
   # train model
   trainer.train()
@@ -169,11 +201,16 @@ if __name__ == '__main__':
   parser.add_argument('--epochs', type=int, default=3, help='number of epochs to train (default: 3)')
   parser.add_argument('--lr', type=float, default=5e-5, help='learning rate (default: 5e-5)')
   parser.add_argument('--train_batch_size', type=int, default=16, help='train batch size (default: 16)')
-  parser.add_argument('--eval_batch_size', type=int, default=16, help='eval batch size (default: 16)')
   parser.add_argument('--warmup_steps', type=int, default=500, help='number of warmup steps for learning rate scheduler (default: 500)')
   parser.add_argument('--weight_decay', type=float, default=0.01, help='strength of weight decay (default: 0.01)')
   parser.add_argument('--evaluation_strategy', type=str, default='steps', help='evaluation strategy to adopt during training, steps or epoch (default: steps)')
 
+  # Validation
+  parser.add_argument('--eval_flag', type=bool, default=True, help='eval flag (default: True)')
+  parser.add_argument('--eval_ratio', type=float, default=0.2, help='eval data size ratio (default: 0.2)')
+  parser.add_argument('--eval_batch_size', type=int, default=16, help='eval batch size (default: 16)')
+  
+  # Seed
   parser.add_argument('--seed', type=int, default=2, help='random seed (default: 2)')
 
   # Wandb

@@ -65,7 +65,7 @@ def main(args):
   """
   device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
   # load tokenizer
-  Tokenizer_NAME = "klue/bert-base"
+  Tokenizer_NAME = args.PLM
   tokenizer = AutoTokenizer.from_pretrained(Tokenizer_NAME)
 
   ## load my model
@@ -96,6 +96,8 @@ if __name__ == '__main__':
   
   # model dir
   parser.add_argument('--model_dir', type=str, default="./best_model")
+  parser.add_argument('--PLM', type=str, help='model type (example: klue/bert-base)' , required=True)
+
   args = parser.parse_args()
   print(args)
   main(args)

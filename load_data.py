@@ -9,6 +9,8 @@ from tqdm import tqdm
 from torch.utils.data import Dataset, Subset
 from preprocessor import *
 
+from time import sleep
+
 class RE_Dataset(Dataset):
   """ Dataset 구성을 위한 class."""
   def __init__(self, pair_dataset, labels, val_size=20):
@@ -88,14 +90,27 @@ def tokenized_dataset(dataset, tokenizer):
   concat_entity = [preprocess_sen(entity).strip() for entity in concat_entity]
   sen_data = [preprocess_sen(sen).strip() for sen in dataset['sentence']]
 
-  tokenized_sentences = tokenizer(
-    concat_entity,
-    sen_data,
-    return_tensors="pt",
-    padding=True,
-    truncation=True,
-    max_length=256,
-    add_special_tokens=True,
-  )
+  """ Roberta TTI_flag """
+  if 'roberta' in tokenizer.name_or_path and not 'xlm' in tokenizer.name_or_path:
+    tokenized_sentences = tokenizer(
+      concat_entity,
+      sen_data,
+      return_tensors="pt",
+      padding=True,
+      truncation=True,
+      max_length=256,
+      add_special_tokens=True,
+      return_token_type_ids=False
+    )
+  else :
+    tokenized_sentences = tokenizer(
+      concat_entity,
+      sen_data,
+      return_tensors="pt",
+      padding=True,
+      truncation=True,
+      max_length=256,
+      add_special_tokens=True
+    )
 
   return tokenized_sentences

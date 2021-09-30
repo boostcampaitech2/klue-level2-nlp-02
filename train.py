@@ -85,6 +85,10 @@ def train(args):
   tokenized_train = tokenized_dataset(train_dataset, tokenizer) # UNK token count
   RE_train_dataset = RE_Dataset(tokenized_train, train_label, args.eval_ratio)
 
+  # print(tokenizer.decode(RE_train_dataset[1]['input_ids']))
+  # print(tokenizer.tokenize(tokenizer.decode(RE_train_dataset[1]['input_ids'])))
+  # return
+
   # Split validation dataset
   if args.eval_flag == True :
     RE_train_dataset, RE_dev_dataset = RE_train_dataset.split()

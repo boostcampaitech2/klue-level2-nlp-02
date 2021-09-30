@@ -59,6 +59,18 @@ def preprocessing_dataset(dataset):
   """ 처음 불러온 csv 파일을 원하는 형태의 DataFrame으로 변경 시켜줍니다."""
   subject_entity = []
   object_entity = []
+  # 완전 중복 제거
+  dataset = dataset.drop_duplicates(['sentence', 'subject_entity', 'object_entity', 'label'], keep='first')
+
+  # 라벨링이 다른 데이터 제거
+  dataset = dataset.drop(index = [6749, 8364, 22258, 277,25094])
+
+  # sentence에 entity 속성 추가
+  sentence_flag = True
+  new_sentence = sentence_processing(dataset)
+  if sentence_flag == True :
+        dataset.sentence = new_sentence
+
   for i,j in zip(dataset['subject_entity'], dataset['object_entity']):
     i = eval(i)['word']
     j = eval(j)['word']
@@ -114,3 +126,5 @@ def tokenized_dataset(dataset, tokenizer):
     )
 
   return tokenized_sentences
+
+  ##

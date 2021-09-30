@@ -100,7 +100,7 @@ def train(args):
   model_config =  AutoConfig.from_pretrained(MODEL_NAME)
   model_config.num_labels = 30
 
-  model =  AutoModelForSequenceClassification.from_pretrained(MODEL_NAME, config=model_config)
+  model =  AutoModelForSequenceClassification.from_pretrained(MODEL_NAME, ignore_mismatched_sizes=args.ignore_mismatched, config=model_config)
   print(model.config)
   model.parameters
   model.to(device)
@@ -166,11 +166,11 @@ def train(args):
       compute_metrics=compute_metrics         # define metrics function
     )
 
-
-
   # train model
   trainer.train()
-  model.save_pretrained('./best_model')
+  model_save_pth = os.path.join(args.save_dir, args.PLM.replace('/', '-') + '-' + args.wandb_unique_tag)
+  os.makedirs(model_save_pth, exist_ok=True)
+  model.save_pretrained(model_save_pth)
   
 def main(args):
   load_dotenv(dotenv_path=args.dotenv_path)
@@ -200,7 +200,7 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
 
   ## Data and model checkpoints directories
-  parser.add_argument('--dir_name', default='exp', help='model save at {SM_SAVE_DIR}/{name}')
+  parser.add_argument('--save_dir', default='./best_models', help='model save at save_dir/PLM-wandb_unique_tag')
   parser.add_argument('--PLM', type=str, default='klue/bert-base', help='model type (default: klue/bert-base)')
   parser.add_argument('--epochs', type=int, default=3, help='number of epochs to train (default: 3)')
   parser.add_argument('--lr', type=float, default=5e-5, help='learning rate (default: 5e-5)')
@@ -208,6 +208,7 @@ if __name__ == '__main__':
   parser.add_argument('--warmup_steps', type=int, default=500, help='number of warmup steps for learning rate scheduler (default: 500)')
   parser.add_argument('--weight_decay', type=float, default=0.01, help='strength of weight decay (default: 0.01)')
   parser.add_argument('--evaluation_strategy', type=str, default='steps', help='evaluation strategy to adopt during training, steps or epoch (default: steps)')
+  parser.add_argument('--ignore_mismatched', type=bool, default=False, help'ignore mismatched size when load pretrained model')
 
   # Validation
   parser.add_argument('--eval_flag', type=bool, default=True, help='eval flag (default: True)')

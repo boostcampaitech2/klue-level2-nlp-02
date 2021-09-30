@@ -8,6 +8,7 @@ import torch.nn.functional as F
 import pickle as pickle
 import numpy as np
 import argparse
+import os
 from tqdm import tqdm
 
 def inference(model, tokenized_sent, device):
@@ -59,6 +60,20 @@ def load_test_dataset(dataset_dir, tokenizer):
   tokenized_test = tokenized_dataset(test_dataset, tokenizer)
   return test_dataset['id'], tokenized_test, test_label
 
+def select_checkpoint(args):
+    models_dir = args.model_dir
+    dirs = os.listdir(models_dir)
+    dirs = sorted(dirs)
+
+    for i, d in enumerate(dirs, 0):
+        print("(%d) %s" % (i, d))
+    d_idx = input("Select directory you want to load: ")
+    
+    checkpoint_dir = os.path.abspath(os.path.join(models_dir, dirs[int(d_idx)]))
+    print("checkpoint_dir is: {}".format(checkpoint_dir))
+
+    return checkpoint_dir
+
 def main(args):
   """
     주어진 dataset csv 파일과 같은 형태일 경우 inference 가능한 코드입니다.
@@ -69,8 +84,8 @@ def main(args):
   tokenizer = AutoTokenizer.from_pretrained(Tokenizer_NAME)
 
   ## load my model
-  MODEL_NAME = args.model_dir # model dir.
-  model = AutoModelForSequenceClassification.from_pretrained(args.model_dir)
+  model_dir = select_checkpoint(args)
+  model = AutoModelForSequenceClassification.from_pretrained(model_dir)
   model.parameters
   model.to(device)
 
@@ -91,14 +106,16 @@ def main(args):
   output.to_csv('./prediction/submission.csv', index=False) # 최종적으로 완성된 예측한 라벨 csv 파일 형태로 저장.
   #### 필수!! ##############################################
   print('---- Finish! ----')
+
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   
   # model dir
-  parser.add_argument('--model_dir', type=str, default="./best_model")
+  parser.add_argument('--model_dir', type=str, default="./best_models")
   parser.add_argument('--PLM', type=str, help='model type (example: klue/bert-base)' , required=True)
 
   args = parser.parse_args()
   print(args)
+
+  os.makedirs('./prediction', exist_ok=True)
   main(args)
-  

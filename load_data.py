@@ -21,8 +21,7 @@ class RE_Dataset(Dataset):
         self.val_ratio = val_ratio
 
     def __getitem__(self, idx):
-        item = {key: val[idx].clone().detach()
-                for key, val in self.pair_dataset.items()}
+        item = {key: val[idx] for key, val in self.pair_dataset.items()}
         item['labels'] = torch.tensor(self.labels[idx])
         return item
 

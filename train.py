@@ -86,6 +86,7 @@ def train(args):
   RE_train_dataset = RE_Dataset(tokenized_train, train_label, args.eval_ratio)
 
   # print(tokenizer.decode(RE_train_dataset[1]['input_ids']))
+  # print(tokenizer.tokenize(tokenizer.decode(RE_train_dataset[1]['input_ids'])))
   # return
 
   # Split validation dataset

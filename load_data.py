@@ -98,7 +98,7 @@ def load_data(dataset_dir):
     return dataset
 
 
-def tokenized_dataset(dataset, tokenizer):
+def tokenized_dataset(dataset, tokenizer, is_inference=False):
     """ tokenizer에 따라 sentence를 tokenizing 합니다."""
     concat_entity = []
     for e01, e02 in zip(dataset['subject_entity'], dataset['object_entity']):
@@ -106,33 +106,47 @@ def tokenized_dataset(dataset, tokenizer):
         temp = e01 + '[SEP]' + e02
         concat_entity.append(temp)
 
-    # concat_entity = [preprocess_sen(entity).strip()
-    #                  for entity in concat_entity]
-    # sen_data = [preprocess_sen(sen).strip() for sen in dataset['sentence']]
-
-    """ Roberta TTI_flag """
-    if 'roberta' in tokenizer.name_or_path and not 'xlm' in tokenizer.name_or_path:
-        tokenized_sentences = tokenizer(
-            concat_entity,
-            list(dataset['sentence']),
-            return_tensors="pt",
-            padding=True,
-            truncation=True,
-            max_length=256,
-            add_special_tokens=True,
-            return_token_type_ids=False
-        )
+    if is_inference:
+        """ Roberta TTI_flag """
+        if 'roberta' in tokenizer.name_or_path and not 'xlm' in tokenizer.name_or_path:
+            tokenized_sentences = tokenizer(
+                concat_entity,
+                list(dataset['sentence']),
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+                max_length=256,
+                add_special_tokens=True,
+                return_token_type_ids=False
+            )
+        else:
+            tokenized_sentences = tokenizer(
+                concat_entity,
+                list(dataset['sentence']),
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+                max_length=256,
+                add_special_tokens=True
+            )
     else:
-        tokenized_sentences = tokenizer(
-            concat_entity,
-            list(dataset['sentence']),
-            return_tensors="pt",
-            padding=True,
-            truncation=True,
-            max_length=256,
-            add_special_tokens=True
-        )
+        """ Roberta TTI_flag """
+        if 'roberta' in tokenizer.name_or_path and not 'xlm' in tokenizer.name_or_path:
+            tokenized_sentences = tokenizer(
+                concat_entity,
+                list(dataset['sentence']),
+                truncation=True,
+                max_length=256,
+                add_special_tokens=True,
+                return_token_type_ids=False
+            )
+        else:
+            tokenized_sentences = tokenizer(
+                concat_entity,
+                list(dataset['sentence']),
+                truncation=True,
+                max_length=256,
+                add_special_tokens=True
+            )
 
     return tokenized_sentences
-
-    ##

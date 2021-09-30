@@ -87,6 +87,9 @@ def preprocessing_dataset(dataset):
   object_entity = []
   sen_data = []
   for i,j in zip(dataset['subject_entity'], dataset['object_entity']):
+    sub_info=eval(i)
+    obj_info=eval(j)
+    
     subject_entity.append(sub_info['word'])
     object_entity.append(obj_info['word'])
         

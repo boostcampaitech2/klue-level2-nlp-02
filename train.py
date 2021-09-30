@@ -5,7 +5,7 @@ import torch
 import sklearn
 import numpy as np
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
-from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer
+from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer, DataCollatorWithPadding
 from load_data import *
 
 import argparse
@@ -77,10 +77,13 @@ def train(args):
   MODEL_NAME = args.PLM
   tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
+  # dynamic padding
+  dynamic_padding = DataCollatorWithPadding(tokenizer=tokenizer)
+
   # load dataset
   train_dataset = load_data("/opt/ml/dataset/train/train.csv")
   train_label = label_to_num(train_dataset['label'].values)
-  
+
   # tokenizing dataset
   tokenized_train = tokenized_dataset(train_dataset, tokenizer) # UNK token count
   RE_train_dataset = RE_Dataset(tokenized_train, train_label, args.eval_ratio)
@@ -130,7 +133,9 @@ def train(args):
       args=training_args,                  # training arguments, defined above
       train_dataset=RE_train_dataset,         # training dataset
       eval_dataset=RE_dev_dataset,             # evaluation dataset
-      compute_metrics=compute_metrics         # define metrics function
+      compute_metrics=compute_metrics,         # define metrics function
+      data_collator=dynamic_padding,
+      tokenizer=tokenizer,
     )
 
   else :
@@ -159,7 +164,9 @@ def train(args):
       args=training_args,                  # training arguments, defined above
       train_dataset=RE_train_dataset,         # training dataset
       eval_dataset=RE_train_dataset,             # evaluation dataset
-      compute_metrics=compute_metrics         # define metrics function
+      compute_metrics=compute_metrics,         # define metrics function
+      data_collator=dynamic_padding,
+      tokenizer=tokenizer,
     )
 
 

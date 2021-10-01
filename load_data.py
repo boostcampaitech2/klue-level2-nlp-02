@@ -80,8 +80,6 @@ def preprocessing_dataset(dataset, entity_flag=0, preprocessing_flag=0, mecab_fl
         new_sentence = sentence_processing(dataset)
         dataset.sentence = new_sentence
 
-    if mecab_flag:
-
     if preprocessing_flag:
         out_dataset = pd.DataFrame({'id': dataset['id'],
                                     'sentence': [text_preprocessing(sent) for sent in dataset['sentence']],
@@ -95,6 +93,7 @@ def preprocessing_dataset(dataset, entity_flag=0, preprocessing_flag=0, mecab_fl
                                     'subject_entity': (subject_entity),
                                     'object_entity': (object_entity),
                                     'label': dataset['label'], })
+
     return out_dataset
 
 

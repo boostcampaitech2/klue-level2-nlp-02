@@ -65,7 +65,7 @@ def load_test_dataset(dataset_dir, tokenizer, entity_flag, preprocessing_flag):
     """
     test_dataset = load_data(dataset_dir, entity_flag, preprocessing_flag)
     test_label = list(map(int, test_dataset['label'].values))
-    
+
     # tokenizing dataset
     tokenized_test = tokenized_dataset(
         test_dataset, tokenizer, is_inference=True)
@@ -140,9 +140,9 @@ if __name__ == '__main__':
     parser.add_argument(
         '--PLM', type=str, help='model type (example: klue/bert-base)', required=True)
     parser.add_argument(
-        '--entity_flag', type=int, help='Train에 사용했던거랑 똑같이 (example: 0/1 => False/True)', required=True)
+        '--entity_flag', action='store_true', help='Train에 사용했던거랑 똑같이 (example: 0/1 => False/True)')
     parser.add_argument(
-        '--preprocessing_flag', type=int, help='Train에 사용했던거랑 똑같이 (example: 0/1 => False/True)', required=True)
+        '--preprocessing_flag', action='store_true', help='Train에 사용했던거랑 똑같이 (example: 0/1 => False/True)')
 
     args = parser.parse_args()
     print(args)

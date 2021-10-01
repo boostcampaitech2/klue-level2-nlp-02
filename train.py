@@ -80,7 +80,6 @@ def label_to_num(label):
 def train(args):
     # load model and tokenizer
     MODEL_NAME = args.PLM
-    MODEL_NAME = 'klue/bert-base'
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
     # dynamic padding
@@ -268,8 +267,6 @@ if __name__ == '__main__':
     parser.add_argument('--entity_flag', default=False, action='store_true',
                         help='add Entity flag  (example: 0/1 => False/True) (default: 0)')
     parser.add_argument('--preprocessing_flag', default=False, action='store_true',
-                        help='input text pre-processing (example: 0/1 => False/True) (default: 0)')
-    parser.add_argument('--mecab_flag', default=False, action='store_true',
                         help='input text pre-processing (example: 0/1 => False/True) (default: 0)')
 
     args = parser.parse_args()

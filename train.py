@@ -99,7 +99,7 @@ def train(args):
         args.seed)
 
     # Split validation dataset
-    if args.eval_flag == 1:
+    if args.eval_flag :
         RE_train_dataset, RE_dev_dataset = RE_train_dataset.split()
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -246,8 +246,8 @@ if __name__ == '__main__':
                         help='ignore mismatched size when load pretrained model')
 
     # Validation
-    parser.add_argument('--eval_flag', type=int,
-                        default=1, help='eval flag (example: 0/1 => False/True) (default: 1)')
+    parser.add_argument('--eval_flag', default=True, action='store_true',
+                        help='eval flag (default: True)')
     parser.add_argument('--eval_ratio', type=float, default=0.2,
                         help='eval data size ratio (default: 0.2)')
     parser.add_argument('--eval_batch_size', type=int,
@@ -265,9 +265,9 @@ if __name__ == '__main__':
 
     # Running mode
     parser.add_argument('--entity_flag', default=False, action='store_true',
-                        help='add Entity flag  (example: 0/1 => False/True) (default: 0)')
+                        help='add Entity flag (default: False)')
     parser.add_argument('--preprocessing_flag', default=False, action='store_true',
-                        help='input text pre-processing (example: 0/1 => False/True) (default: 0)')
+                        help='input text pre-processing (default: False)')
 
     args = parser.parse_args()
 

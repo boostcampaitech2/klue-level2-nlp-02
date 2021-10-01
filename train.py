@@ -203,7 +203,7 @@ def main(args):
 
     wandb.init(
         entity="klue-level2-nlp-02",
-        project="Relation-Extraction",
+        project="Relation-Extraction_1001",
         name=args.wandb_unique_tag,
         group=args.PLM)
     wandb.config.update(args)

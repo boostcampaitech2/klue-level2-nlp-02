@@ -100,7 +100,7 @@ def train(args):
         args.seed)
         
     # Split validation dataset
-    if args.eval_flag == True:
+    if args.eval_flag == 1:
         RE_train_dataset, RE_dev_dataset = RE_train_dataset.split()
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -247,8 +247,8 @@ if __name__ == '__main__':
                         help='ignore mismatched size when load pretrained model')
 
     # Validation
-    parser.add_argument('--eval_flag', type=bool,
-                        default=True, help='eval flag (default: True)')
+    parser.add_argument('--eval_flag', type=int,
+                        default=1, help='eval flag (example: 0/1 => False/True) (default: 1)')
     parser.add_argument('--eval_ratio', type=float, default=0.2,
                         help='eval data size ratio (default: 0.2)')
     parser.add_argument('--eval_batch_size', type=int,
@@ -265,14 +265,14 @@ if __name__ == '__main__':
                         help='input your wandb unique tag (default: bert-base-high-lr)')
 
     # Running mode
-    parser.add_argument('--entity_flag', default='False', type=bool,
-                        help='add Entity flag (default: False)')
-    parser.add_argument('--preprocessing_flag', default='False', type=bool,
-                        help='input text pre-processing, (default: False)')
+    parser.add_argument('--entity_flag', type=int, default=0, 
+                        help='add Entity flag  (example: 0/1 => False/True) (default: 0)')
+    parser.add_argument('--preprocessing_flag', type=str, default=0, 
+                        help='input text pre-processing (example: 0/1 => False/True) (default: 0)')
 
     args = parser.parse_args()
 
     # Start
     seed_everything(args.seed)
-
+    
     main(args)

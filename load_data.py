@@ -54,8 +54,13 @@ class RE_Dataset(Dataset):
         val_dset = Subset(self, val_data)
         return train_dset, val_dset
 
+def text_preprocessing(sentence) :
+    sent = remove_special_char(sentence)
+    sent = substitution_date(sent)
+    sent = add_space_char(sent)
+    return sent
 
-def preprocessing_dataset(dataset, entity_flag = False, preprocessing_flag = False):
+def preprocessing_dataset(dataset, entity_flag = 0, preprocessing_flag = 0):
     """ 처음 불러온 csv 파일을 원하는 형태의 DataFrame으로 변경 시켜줍니다."""
     subject_entity = []
     object_entity = []
@@ -68,17 +73,13 @@ def preprocessing_dataset(dataset, entity_flag = False, preprocessing_flag = Fal
         subject_entity.append(i)
         object_entity.append(j)
     
-    if entity_flag :
+    if entity_flag == 1:
+        print('entity_flag',entity_flag)
         new_sentence = sentence_processing(dataset)
         dataset.sentence = new_sentence
-    
-    def text_preprocessing(sentence) :
-        sent = remove_special_char(sentence)
-        sent = substitution_date(sent)
-        sent = add_space_char(sent)
-        return sent
-    
-    if preprocessing_flag :
+        
+    if preprocessing_flag == 1:
+        print('preprocessing_flag',preprocessing_flag)
         out_dataset = pd.DataFrame({'id': dataset['id'],
                                     'sentence': [text_preprocessing(sent) for sent in dataset['sentence']],
                                     'subject_entity': [text_preprocessing(entity) for entity in subject_entity],
@@ -93,7 +94,7 @@ def preprocessing_dataset(dataset, entity_flag = False, preprocessing_flag = Fal
     return out_dataset
 
 
-def load_data(dataset_dir, entityFlag=False, preprocessingFlag=False):
+def load_data(dataset_dir, entity_flag=0, preprocessing_flag=0):
     """ csv 파일을 경로에 맡게 불러 옵니다. """
     pd_dataset = pd.read_csv(dataset_dir)
     if 'train' in dataset_dir:
@@ -103,7 +104,7 @@ def load_data(dataset_dir, entityFlag=False, preprocessingFlag=False):
         # 라벨링이 다른 데이터 제거
         pd_dataset = pd_dataset.drop(index=[6749, 8364, 22258, 277, 25094])
 
-    dataset = preprocessing_dataset(pd_dataset, entityFlag, preprocessingFlag)
+    dataset = preprocessing_dataset(pd_dataset, entity_flag, preprocessing_flag)
     return dataset
 
 

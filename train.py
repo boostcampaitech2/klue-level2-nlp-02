@@ -210,7 +210,7 @@ def main(args):
 
     train(args)
     wandb.finish()
-
+ 
 
 def seed_everything(seed):
     torch.manual_seed(seed)
@@ -265,7 +265,7 @@ if __name__ == '__main__':
 
     # Running mode
     parser.add_argument('--entity_flag', default=False, action='store_true',
-                        help='add Entity flag (default: False)')
+                        help='add Entity flag (default: Tr)')
     parser.add_argument('--preprocessing_flag', default=False, action='store_true',
                         help='input text pre-processing (default: False)')
 

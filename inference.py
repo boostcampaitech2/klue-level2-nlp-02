@@ -140,9 +140,9 @@ if __name__ == '__main__':
     parser.add_argument(
         '--PLM', type=str, help='model type (example: klue/bert-base)', required=True)
     parser.add_argument(
-        '--entity_flag', action='store_true', help='Train에 사용했던거랑 똑같이 (example: 0/1 => False/True)')
+        '--entity_flag', default=False, action='store_true', help='Train에 사용했던거랑 똑같이 (default: False)')
     parser.add_argument(
-        '--preprocessing_flag', action='store_true', help='Train에 사용했던거랑 똑같이 (example: 0/1 => False/True)')
+        '--preprocessing_flag', default=False, action='store_true', help='Train에 사용했던거랑 똑같이 (default: False)')
 
     args = parser.parse_args()
     print(args)

@@ -265,7 +265,7 @@ if __name__ == '__main__':
 
     # Running mode
     parser.add_argument('--entity_flag', default=False, action='store_true',
-                        help='add Entity flag (default: Tr)')
+                        help='add Entity flag (default: False)')
     parser.add_argument('--preprocessing_flag', default=False, action='store_true',
                         help='input text pre-processing (default: False)')
 

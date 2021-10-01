@@ -26,8 +26,7 @@ def inference(model, tokenized_sent, device, is_roberta=False):
             if is_roberta:
                 outputs = model(
                     input_ids=data['input_ids'].to(device),
-                    attention_mask=data['attention_mask'].to(device),
-                    # token_type_ids=data['token_type_ids'].to(device)
+                    attention_mask=data['attention_mask'].to(device)
                 )
             else:
                 outputs = model(
@@ -59,13 +58,14 @@ def num_to_label(label):
     return origin_label
 
 
-def load_test_dataset(dataset_dir, tokenizer):
+def load_test_dataset(dataset_dir, tokenizer, entity_flag, preprocessing_flag):
     """
       test dataset을 불러온 후,
       tokenizing 합니다.
     """
-    test_dataset = load_data(dataset_dir)
+    test_dataset = load_data(dataset_dir, entity_flag, preprocessing_flag)
     test_label = list(map(int, test_dataset['label'].values))
+    
     # tokenizing dataset
     tokenized_test = tokenized_dataset(
         test_dataset, tokenizer, is_inference=True)
@@ -112,7 +112,7 @@ def main(args):
         is_roberta = False
 
     test_id, test_dataset, test_label = load_test_dataset(
-        test_dataset_dir, tokenizer)
+        test_dataset_dir, tokenizer, args.entity_flag, args.preprocessing_flag)
     Re_test_dataset = RE_Dataset(test_dataset, test_label)
 
     # predict answer
@@ -139,6 +139,10 @@ if __name__ == '__main__':
     parser.add_argument('--model_dir', type=str, default="./best_models")
     parser.add_argument(
         '--PLM', type=str, help='model type (example: klue/bert-base)', required=True)
+    parser.add_argument(
+        '--entity_flag', type=int, help='Train에 사용했던거랑 똑같이 (example: 0/1 => False/True)', required=True)
+    parser.add_argument(
+        '--preprocessing_flag', type=int, help='Train에 사용했던거랑 똑같이 (example: 0/1 => False/True)', required=True)
 
     args = parser.parse_args()
     print(args)

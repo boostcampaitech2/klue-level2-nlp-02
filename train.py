@@ -80,27 +80,27 @@ def label_to_num(label):
 def train(args):
     # load model and tokenizer
     MODEL_NAME = args.PLM
+    MODEL_NAME='klue/bert-base'
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
     # dynamic padding
     dynamic_padding = DataCollatorWithPadding(tokenizer=tokenizer)
 
     # load dataset
-    train_dataset = load_data("/opt/ml/dataset/train/train.csv")
+    train_dataset = load_data("/opt/ml/dataset/train/train.csv",
+                                args.entity_flag, args.preprocessing_flag)
     train_label = label_to_num(train_dataset['label'].values)
 
     # tokenizing dataset
     tokenized_train = tokenized_dataset(
         train_dataset, tokenizer)  # UNK token count
+
     RE_train_dataset = RE_Dataset(
-        tokenized_train, train_label, args.eval_ratio)
-
-    # print(tokenizer.decode(RE_train_dataset[1]['input_ids']))
-    # print(tokenizer.tokenize(tokenizer.decode(RE_train_dataset[1]['input_ids'])))
-    # return
-
+        tokenized_train, train_label, args.eval_ratio,
+        args.seed)
+        
     # Split validation dataset
-    if args.eval_flag == True:
+    if args.eval_flag == 1:
         RE_train_dataset, RE_dev_dataset = RE_train_dataset.split()
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -247,8 +247,8 @@ if __name__ == '__main__':
                         help='ignore mismatched size when load pretrained model')
 
     # Validation
-    parser.add_argument('--eval_flag', type=bool,
-                        default=True, help='eval flag (default: True)')
+    parser.add_argument('--eval_flag', type=int,
+                        default=1, help='eval flag (example: 0/1 => False/True) (default: 1)')
     parser.add_argument('--eval_ratio', type=float, default=0.2,
                         help='eval data size ratio (default: 0.2)')
     parser.add_argument('--eval_batch_size', type=int,
@@ -264,9 +264,15 @@ if __name__ == '__main__':
     parser.add_argument('--wandb_unique_tag', default='bert-base-high-lr',
                         help='input your wandb unique tag (default: bert-base-high-lr)')
 
+    # Running mode
+    parser.add_argument('--entity_flag', type=int, default=0, 
+                        help='add Entity flag  (example: 0/1 => False/True) (default: 0)')
+    parser.add_argument('--preprocessing_flag', type=str, default=0, 
+                        help='input text pre-processing (example: 0/1 => False/True) (default: 0)')
+
     args = parser.parse_args()
 
     # Start
     seed_everything(args.seed)
-
+    
     main(args)

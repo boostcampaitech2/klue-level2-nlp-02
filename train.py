@@ -80,7 +80,7 @@ def label_to_num(label):
 def train(args):
     # load model and tokenizer
     MODEL_NAME = args.PLM
-    MODEL_NAME='klue/bert-base'
+    MODEL_NAME = 'klue/bert-base'
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
     # dynamic padding
@@ -88,7 +88,7 @@ def train(args):
 
     # load dataset
     train_dataset = load_data("/opt/ml/dataset/train/train.csv",
-                                args.entity_flag, args.preprocessing_flag)
+                              args.entity_flag, args.preprocessing_flag)
     train_label = label_to_num(train_dataset['label'].values)
 
     # tokenizing dataset
@@ -98,7 +98,7 @@ def train(args):
     RE_train_dataset = RE_Dataset(
         tokenized_train, train_label, args.eval_ratio,
         args.seed)
-        
+
     # Split validation dataset
     if args.eval_flag == 1:
         RE_train_dataset, RE_dev_dataset = RE_train_dataset.split()
@@ -265,14 +265,16 @@ if __name__ == '__main__':
                         help='input your wandb unique tag (default: bert-base-high-lr)')
 
     # Running mode
-    parser.add_argument('--entity_flag', type=int, default=0, 
+    parser.add_argument('--entity_flag', default=False, action='store_true',
                         help='add Entity flag  (example: 0/1 => False/True) (default: 0)')
-    parser.add_argument('--preprocessing_flag', type=str, default=0, 
+    parser.add_argument('--preprocessing_flag', default=False, action='store_true',
+                        help='input text pre-processing (example: 0/1 => False/True) (default: 0)')
+    parser.add_argument('--mecab_flag', default=False, action='store_true',
                         help='input text pre-processing (example: 0/1 => False/True) (default: 0)')
 
     args = parser.parse_args()
 
     # Start
     seed_everything(args.seed)
-    
+
     main(args)

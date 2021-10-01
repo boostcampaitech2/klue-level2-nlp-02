@@ -80,25 +80,25 @@ def label_to_num(label):
 def train(args):
     # load model and tokenizer
     MODEL_NAME = args.PLM
+    MODEL_NAME='klue/bert-base'
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
     # dynamic padding
     dynamic_padding = DataCollatorWithPadding(tokenizer=tokenizer)
 
     # load dataset
-    train_dataset = load_data("/opt/ml/dataset/train/train.csv")
+    train_dataset = load_data("/opt/ml/dataset/train/train.csv",
+                                args.entity_flag, args.preprocessing_flag)
     train_label = label_to_num(train_dataset['label'].values)
 
     # tokenizing dataset
     tokenized_train = tokenized_dataset(
         train_dataset, tokenizer)  # UNK token count
+
     RE_train_dataset = RE_Dataset(
-        tokenized_train, train_label, args.eval_ratio)
-
-    # print(tokenizer.decode(RE_train_dataset[1]['input_ids']))
-    # print(tokenizer.tokenize(tokenizer.decode(RE_train_dataset[1]['input_ids'])))
-    # return
-
+        tokenized_train, train_label, args.eval_ratio,
+        args.seed)
+        
     # Split validation dataset
     if args.eval_flag == True:
         RE_train_dataset, RE_dev_dataset = RE_train_dataset.split()
@@ -263,6 +263,12 @@ if __name__ == '__main__':
         '--dotenv_path', default='/opt/ml/wandb.env', help='input your dotenv path')
     parser.add_argument('--wandb_unique_tag', default='bert-base-high-lr',
                         help='input your wandb unique tag (default: bert-base-high-lr)')
+
+    # Running mode
+    parser.add_argument('--entity_flag', default='False', type=bool,
+                        help='add Entity flag (default: False)')
+    parser.add_argument('--preprocessing_flag', default='False', type=bool,
+                        help='input text pre-processing, (default: False)')
 
     args = parser.parse_args()
 

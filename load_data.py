@@ -7,18 +7,16 @@ import random
 import torch
 from tqdm import tqdm
 from torch.utils.data import Dataset, Subset
-from preprocessor import *
-
-from time import sleep
-
+from Preprocessing.preprocessor import *
 
 class RE_Dataset(Dataset):
     """ Dataset 구성을 위한 class."""
 
-    def __init__(self, pair_dataset, labels, val_ratio=0.2):
+    def __init__(self, pair_dataset, labels,
+                    val_ratio=0.2, seed = 2):
         self.pair_dataset = pair_dataset
         self.labels = labels
-        self.val_ratio = val_ratio
+        self.val_ratio = val_ratio        
 
     def __getitem__(self, idx):
         item = {key: val[idx] for key, val in self.pair_dataset.items()}
@@ -57,33 +55,45 @@ class RE_Dataset(Dataset):
         return train_dset, val_dset
 
 
-def preprocessing_dataset(dataset):
+def preprocessing_dataset(dataset, entity_flag = False, preprocessing_flag = False):
     """ 처음 불러온 csv 파일을 원하는 형태의 DataFrame으로 변경 시켜줍니다."""
     subject_entity = []
     object_entity = []
 
     # sentence에 entity 속성 추가
-    sentence_flag = True
-    if sentence_flag == True:
-        new_sentence = sentence_processing(dataset)
-        dataset.sentence = new_sentence
-
     for i, j in zip(dataset['subject_entity'], dataset['object_entity']):
         i = eval(i)['word']
         j = eval(j)['word']
 
         subject_entity.append(i)
         object_entity.append(j)
-
-    out_dataset = pd.DataFrame({'id': dataset['id'],
-                                'sentence': dataset['sentence'],
-                                'subject_entity': subject_entity,
-                                'object_entity': object_entity,
-                                'label': dataset['label'], })
+    
+    if entity_flag :
+        new_sentence = sentence_processing(dataset)
+        dataset.sentence = new_sentence
+    
+    def text_preprocessing(sentence) :
+        sent = remove_special_char(sentence)
+        sent = substitution_date(sent)
+        sent = add_space_char(sent)
+        return sent
+    
+    if preprocessing_flag :
+        out_dataset = pd.DataFrame({'id': dataset['id'],
+                                    'sentence': [text_preprocessing(sent) for sent in dataset['sentence']],
+                                    'subject_entity': [text_preprocessing(entity) for entity in subject_entity],
+                                    'object_entity': [text_preprocessing(entity) for entity in object_entity],
+                                    'label': dataset['label'], })
+    else :
+        out_dataset = pd.DataFrame({'id': dataset['id'],
+                            'sentence': (dataset['sentence']),
+                            'subject_entity': (subject_entity),
+                            'object_entity': (object_entity),
+                            'label': dataset['label'], })
     return out_dataset
 
 
-def load_data(dataset_dir):
+def load_data(dataset_dir, entityFlag=False, preprocessingFlag=False):
     """ csv 파일을 경로에 맡게 불러 옵니다. """
     pd_dataset = pd.read_csv(dataset_dir)
     if 'train' in dataset_dir:
@@ -93,7 +103,7 @@ def load_data(dataset_dir):
         # 라벨링이 다른 데이터 제거
         pd_dataset = pd_dataset.drop(index=[6749, 8364, 22258, 277, 25094])
 
-    dataset = preprocessing_dataset(pd_dataset)
+    dataset = preprocessing_dataset(pd_dataset, entityFlag, preprocessingFlag)
     return dataset
 
 

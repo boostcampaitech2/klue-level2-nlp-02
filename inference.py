@@ -58,12 +58,13 @@ def num_to_label(label):
     return origin_label
 
 
-def load_test_dataset(dataset_dir, tokenizer, entity_flag, preprocessing_flag):
+def load_test_dataset(dataset_dir, tokenizer, entity_flag, preprocessing_flag, mecab_flag):
     """
       test dataset을 불러온 후,
       tokenizing 합니다.
     """
-    test_dataset = load_data(dataset_dir, entity_flag, preprocessing_flag)
+    test_dataset = load_data(dataset_dir, entity_flag,
+                             preprocessing_flag, mecab_flag)
     test_label = list(map(int, test_dataset['label'].values))
 
     # tokenizing dataset
@@ -112,7 +113,7 @@ def main(args):
         is_roberta = False
 
     test_id, test_dataset, test_label = load_test_dataset(
-        test_dataset_dir, tokenizer, args.entity_flag, args.preprocessing_flag)
+        test_dataset_dir, tokenizer, args.entity_flag, args.preprocessing_flag, args.mecab_flag)
     Re_test_dataset = RE_Dataset(test_dataset, test_label)
 
     # predict answer
@@ -143,6 +144,8 @@ if __name__ == '__main__':
         '--entity_flag', default=False, action='store_true', help='Train에 사용했던거랑 똑같이 (default: False)')
     parser.add_argument(
         '--preprocessing_flag', default=False, action='store_true', help='Train에 사용했던거랑 똑같이 (default: False)')
+    parser.add_argument(
+        '--mecab_flag', default=False, action='store_true', help='Train에 사용했던거랑 똑같이 (default: False)')
 
     args = parser.parse_args()
     print(args)

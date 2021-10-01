@@ -94,6 +94,14 @@ def preprocessing_dataset(dataset, entity_flag=0, preprocessing_flag=0, mecab_fl
                                     'object_entity': (object_entity),
                                     'label': dataset['label'], })
 
+    if mecab_flag:
+        out_dataset = pd.DataFrame({'id': dataset['id'],
+                                    'sentence': mecab_processing(dataset['sentence']),
+                                    'subject_entity': mecab_processing(subject_entity),
+                                    'object_entity': mecab_processing(object_entity),
+                                    'label': dataset['label'], })
+        print('Finish mecab preprocessing!!!')
+
     return out_dataset
 
 

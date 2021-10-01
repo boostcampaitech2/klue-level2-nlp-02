@@ -91,10 +91,8 @@ def mecab_processing(sentences):
 
     mecab_sentence = []
 
-    for sentence in tqdm(sentences):
+    for sentence in sentences:
         tokens = tokenizer.morphs(sentence)
         mecab_sentence.append(" ".join(tokens))
-
-    print("Finish type mecab processing!!!")
 
     return mecab_sentence

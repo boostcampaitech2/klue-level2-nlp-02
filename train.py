@@ -87,7 +87,7 @@ def train(args):
 
     # load dataset
     train_dataset = load_data("/opt/ml/dataset/train/train.csv",
-                              args.entity_flag, args.preprocessing_flag)
+                              args.entity_flag, args.preprocessing_flag, args.mecab_flag)
     train_label = label_to_num(train_dataset['label'].values)
 
     # tokenizing dataset
@@ -99,7 +99,7 @@ def train(args):
         args.seed)
 
     # Split validation dataset
-    if args.eval_flag :
+    if args.eval_flag:
         RE_train_dataset, RE_dev_dataset = RE_train_dataset.split()
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -210,7 +210,7 @@ def main(args):
 
     train(args)
     wandb.finish()
- 
+
 
 def seed_everything(seed):
     torch.manual_seed(seed)
@@ -267,6 +267,8 @@ if __name__ == '__main__':
     parser.add_argument('--entity_flag', default=False, action='store_true',
                         help='add Entity flag (default: False)')
     parser.add_argument('--preprocessing_flag', default=False, action='store_true',
+                        help='input text pre-processing (default: False)')
+    parser.add_argument('--mecab_flag', default=False, action='store_true',
                         help='input text pre-processing (default: False)')
 
     args = parser.parse_args()

@@ -7,6 +7,7 @@ import numpy as np
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
 from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer, DataCollatorWithPadding
 from load_data import *
+from Preprocessing.preprocessor import add_unk_tokens
 
 import argparse
 from pathlib import Path
@@ -87,13 +88,19 @@ def train(args):
 
     # load dataset
     train_dataset = load_data("/opt/ml/dataset/train/train.csv",
-                              args.entity_flag, args.preprocessing_flag)
+                              args.entity_flag, args.preprocessing_cmb)
     train_label = label_to_num(train_dataset['label'].values)
 
     # tokenizing dataset
     tokenized_train = tokenized_dataset(
-        train_dataset, tokenizer)  # UNK token count
+        train_dataset, tokenizer, is_inference=False)  # UNK token count
 
+    if args.add_unk_token :
+        tokenizer, added_token_num = add_unk_tokens(list(train_dataset['sentence']),
+                                                    list(train_dataset['subject_entity']),
+                                                    list(train_dataset['object_entity']),
+                                                    tokenizer)
+                                                    
     RE_train_dataset = RE_Dataset(
         tokenized_train, train_label, args.eval_ratio,
         args.seed)
@@ -111,6 +118,8 @@ def train(args):
 
     model = AutoModelForSequenceClassification.from_pretrained(
         MODEL_NAME, ignore_mismatched_sizes=args.ignore_mismatched, config=model_config)
+    if args.add_unk_token :
+        model.resize_token_embeddings(tokenizer.vocab_size + added_token_num)
     print(model.config)
     model.parameters
     model.to(device)
@@ -205,7 +214,7 @@ def main(args):
         entity="klue-level2-nlp-02",
         project="Relation-Extraction_1001",
         name=args.wandb_unique_tag,
-        group=args.PLM)
+        group=args.PLM+'_pp_test')
     wandb.config.update(args)
 
     train(args)
@@ -266,8 +275,12 @@ if __name__ == '__main__':
     # Running mode
     parser.add_argument('--entity_flag', default=False, action='store_true',
                         help='add Entity flag (default: False)')
-    parser.add_argument('--preprocessing_flag', default=False, action='store_true',
-                        help='input text pre-processing (default: False)')
+    # parser.add_argument('--preprocessing_flag', default=False, action='store_true',
+    #                     help='input text pre-processing (default: False)')
+    parser.add_argument('--preprocessing_cmb', nargs='+', help='<Required> Set flag (example: 0 1 2)')
+
+    parser.add_argument('--add_unk_token', default=False, action='store_true',
+                        help='add unknown token in vocab (default: False)')
 
     args = parser.parse_args()
 

@@ -56,14 +56,17 @@ class RE_Dataset(Dataset):
         return train_dset, val_dset
 
 
-def text_preprocessing(sentence):
-    sent = remove_special_char(sentence)
-    sent = substitution_date(sent)
-    sent = add_space_char(sent)
-    return sent
+def text_preprocessing(sentence, preprocessing_cmb):
+    if 0 in preprocessing_cmb :
+        sentence = remove_special_char(sentence)
+    if 1 in preprocessing_cmb :
+        sentence = substitution_date(sentence)
+    if 2 in preprocessing_cmb :
+        sentence = add_space_char(sentence)
+    return sentence
 
 
-def preprocessing_dataset(dataset, entity_flag=0, preprocessing_flag=0, mecab_flag=0):
+def preprocessing_dataset(dataset, entity_flag=0, preprocessing_cmb=None, mecab_flag=0):
     """ 처음 불러온 csv 파일을 원하는 형태의 DataFrame으로 변경 시켜줍니다."""
     subject_entity = []
     object_entity = []
@@ -80,20 +83,20 @@ def preprocessing_dataset(dataset, entity_flag=0, preprocessing_flag=0, mecab_fl
         new_sentence = sentence_processing(dataset)
         dataset.sentence = new_sentence
 
-    if preprocessing_flag:
+    if preprocessing_cmb != None :
         out_dataset = pd.DataFrame({'id': dataset['id'],
-                                    'sentence': [text_preprocessing(sent) for sent in dataset['sentence']],
-                                    'subject_entity': [text_preprocessing(entity) for entity in subject_entity],
-                                    'object_entity': [text_preprocessing(entity) for entity in object_entity],
+                                    'sentence': [text_preprocessing(sent, preprocessing_cmb) for sent in dataset['sentence']],
+                                    'subject_entity': [text_preprocessing(entity, preprocessing_cmb) for entity in subject_entity],
+                                    'object_entity': [text_preprocessing(entity, preprocessing_cmb) for entity in object_entity],
                                     'label': dataset['label'], })
-        print('Finish data preprocessing!!!')
+        print('Finish text preprocessing!!!')
     else:
         out_dataset = pd.DataFrame({'id': dataset['id'],
                                     'sentence': (dataset['sentence']),
                                     'subject_entity': (subject_entity),
                                     'object_entity': (object_entity),
                                     'label': dataset['label'], })
-
+        print('None text preprocessing')
     return out_dataset
 
 
@@ -114,6 +117,7 @@ def load_data(dataset_dir, entity_flag=0, preprocessing_flag=0, mecab_flag=0):
 
 def tokenized_dataset(dataset, tokenizer, is_inference=False):
     """ tokenizer에 따라 sentence를 tokenizing 합니다."""
+
     concat_entity = []
     for e01, e02 in zip(dataset['subject_entity'], dataset['object_entity']):
         temp = ''

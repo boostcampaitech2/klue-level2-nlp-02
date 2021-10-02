@@ -7,15 +7,14 @@ import random
 import torch
 from tqdm import tqdm
 from torch.utils.data import Dataset, Subset
-from preprocessor import *
-
-from time import sleep
+from Preprocessing.preprocessor import *
 
 
 class RE_Dataset(Dataset):
     """ Dataset 구성을 위한 class."""
 
-    def __init__(self, pair_dataset, labels, val_ratio=0.2):
+    def __init__(self, pair_dataset, labels,
+                 val_ratio=0.2, seed=2):
         self.pair_dataset = pair_dataset
         self.labels = labels
         self.val_ratio = val_ratio
@@ -25,7 +24,6 @@ class RE_Dataset(Dataset):
         item['labels'] = torch.tensor(self.labels[idx])
         return item
 
-    
     def __len__(self):
         return len(self.labels)
 
@@ -56,104 +54,79 @@ class RE_Dataset(Dataset):
         train_dset = Subset(self, train_data)
         val_dset = Subset(self, val_data)
         return train_dset, val_dset
-    
-TAG_DICT = {'PER' : '인물', 'ORG' : '기관', 'DAT' : '날짜', 'LOC' : '위치', 'NOH' : '수량' , 'POH' : '기타'}
-SUB_TOKEN1 = '▲'
-SUB_TOKEN2 = '▫'
-OBJ_TOKEN1 = '◈'
-OBJ_TOKEN2 = '☆'
-def add_sep_tok(sen, sub_start, sub_end, sub_type, obj_start, obj_end, obj_type) :
-    sub_tok = TAG_DICT[sub_type]
-    obj_tok = TAG_DICT[obj_type]
 
-    sub_start_tok = ' ' + SUB_TOKEN1 + ' ' + SUB_TOKEN2 + ' ' + sub_tok + ' ' + SUB_TOKEN2 + ' '
-    sub_end_tok = ' ' + SUB_TOKEN1 + ' '
-    obj_start_tok = ' ' + OBJ_TOKEN1 + ' ' + OBJ_TOKEN2 + ' ' + obj_tok + ' ' + OBJ_TOKEN2 + ' '
-    obj_end_tok = ' ' + OBJ_TOKEN1 + ' '
 
-    if sub_start < obj_start :
-        sen = sen[:sub_start] +  sub_start_tok + sen[sub_start:sub_end+1] + sub_end_tok + sen[sub_end+1:]
-        obj_start += 13
-        obj_end += 13
-        sen = sen[:obj_start] + obj_start_tok + sen[obj_start:obj_end+1] + obj_end_tok + sen[obj_end+1:]
-    else :
-        sen = sen[:obj_start] + obj_start_tok + sen[obj_start:obj_end+1] + obj_end_tok + sen[obj_end+1:]
-        sub_start += 13
-        sub_end += 13
-        sen = sen[:sub_start] + sub_start_tok + sen[sub_start:sub_end+1] + sub_end_tok + sen[sub_end+1:]
+def text_preprocessing(sentence):
+    sent = remove_special_char(sentence)
+    sent = substitution_date(sent)
+    sent = add_space_char(sent)
+    return sent
 
-    return sen
 
-def preprocessing_dataset(dataset):
+def preprocessing_dataset(dataset, entity_flag=0, preprocessing_flag=0, mecab_flag=0):
+    """ 처음 불러온 csv 파일을 원하는 형태의 DataFrame으로 변경 시켜줍니다."""
     subject_entity = []
     object_entity = []
-    
-    sen_data = []
-    for s, i, j in zip(dataset['sentence'], dataset['subject_entity'], dataset['object_entity']):
-        sub_info=eval(i)
-        obj_info=eval(j)
 
-        subject_entity.append(sub_info['word'])
-        object_entity.append(obj_info['word'])
+    # sentence에 entity 속성 추가
+    for i, j in zip(dataset['subject_entity'], dataset['object_entity']):
+        i = eval(i)['word']
+        j = eval(j)['word']
 
-        sub_type = sub_info['type']
-        sub_start = sub_info['start_idx']
-        sub_end = sub_info['end_idx']
-        obj_type = obj_info['type']
-        obj_start = obj_info['start_idx']
-        obj_end = obj_info['end_idx']
-        #s = preprocessing_sen(s)
-        
-        sen = re.sub('[À-ÿ]', '', s)
-        sen = add_sep_tok(sen, sub_start, sub_end, sub_type, obj_start, obj_end, obj_type)
-        
-        #sen = sentence_processing(s)
-        sen_data.append(sen)
-    out_dataset = pd.DataFrame({'id':dataset['id'], 
-    'sentence':sen_data,
-    'subject_entity':subject_entity,
-    'object_entity':object_entity,
-    'label':dataset['label'],})
+        subject_entity.append(i)
+        object_entity.append(j)
+
+    if entity_flag:
+        new_sentence = sentence_processing(dataset)
+        dataset.sentence = new_sentence
+
+    if preprocessing_flag and mecab_flag:
+        out_dataset = pd.DataFrame({'id': dataset['id'],
+                                    'sentence': [mecab_processing(text_preprocessing(sent)) for sent in dataset['sentence']],
+                                    'subject_entity': [mecab_processing(text_preprocessing(entity)) for entity in subject_entity],
+                                    'object_entity': [mecab_processing(text_preprocessing(entity)) for entity in object_entity],
+                                    'label': dataset['label'], })
+        print('Finish preprocessing and mecab !!!')
+
+    elif preprocessing_flag and not mecab_flag:
+        out_dataset = pd.DataFrame({'id': dataset['id'],
+                                    'sentence': [text_preprocessing(sent) for sent in dataset['sentence']],
+                                    'subject_entity': [text_preprocessing(entity) for entity in subject_entity],
+                                    'object_entity': [text_preprocessing(entity) for entity in object_entity],
+                                    'label': dataset['label'], })
+        print('Finish data preprocessing!!!')
+
+    elif mecab_flag and not preprocessing_flag:
+        out_dataset = pd.DataFrame({'id': dataset['id'],
+                                    'sentence': [mecab_processing(sent) for sent in dataset['sentence']],
+                                    'subject_entity': [mecab_processing(entity) for entity in subject_entity],
+                                    'object_entity': [mecab_processing(entity) for entity in object_entity],
+                                    'label': dataset['label'], })
+        print('Finish mecab preprocessing!!!')
+    else:
+        out_dataset = pd.DataFrame({'id': dataset['id'],
+                                    'sentence': (dataset['sentence']),
+                                    'subject_entity': (subject_entity),
+                                    'object_entity': (object_entity),
+                                    'label': dataset['label'], })
+        print('None preprocessing')
+
     return out_dataset
 
 
-# def preprocessing_dataset(dataset):
-#     """ 처음 불러온 csv 파일을 원하는 형태의 DataFrame으로 변경 시켜줍니다."""
-#     subject_entity = []
-#     object_entity = []
-    
-#     # sentence에 entity 속성 추가
-#     sentence_flag = True
-#     if sentence_flag == True:
-#         new_sentence = sentence_processing(dataset['sentence'])
-#         dataset.sentence = new_sentence
-
-#     for i, j in zip(dataset['subject_entity'], dataset['object_entity']):
-#         i = eval(i)['word']
-#         j = eval(j)['word']
-
-#         subject_entity.append(i)
-#         object_entity.append(j)
-
-#     out_dataset = pd.DataFrame({'id': dataset['id'],
-#                                 'sentence': dataset['sentence'],
-#                                 'subject_entity': subject_entity,
-#                                 'object_entity': object_entity,
-#                                 'label': dataset['label'], })
-#     return out_dataset
-
-
-def load_data(dataset_dir):
+def load_data(dataset_dir, entity_flag=0, preprocessing_flag=0, mecab_flag=0):
     """ csv 파일을 경로에 맡게 불러 옵니다. """
     pd_dataset = pd.read_csv(dataset_dir)
     if 'train' in dataset_dir:
         # 완전 중복 제거 42개
-        pd_dataset = pd_dataset.drop_duplicates(['sentence', 'subject_entity', 'object_entity', 'label'], keep='first')
+        pd_dataset = pd_dataset.drop_duplicates(
+            ['sentence', 'subject_entity', 'object_entity', 'label'], keep='first')
         # 라벨링이 다른 데이터 제거
         pd_dataset = pd_dataset.drop(index=[6749, 8364, 22258, 277, 25094])
-        pd_dataset = pd_dataset.reset_index()
+        print("Finish remove duplicated data")
 
-    dataset = preprocessing_dataset(pd_dataset)
+    dataset = preprocessing_dataset(
+        pd_dataset, entity_flag, preprocessing_flag, mecab_flag)
     return dataset
 
 

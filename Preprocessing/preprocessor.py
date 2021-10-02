@@ -86,13 +86,10 @@ def sentence_processing(data):
     return new_sentence
 
 
-def mecab_processing(sentences):
+def mecab_processing(sentence):
     tokenizer = Mecab()
 
-    mecab_sentence = []
-
-    for sentence in sentences:
-        tokens = tokenizer.morphs(sentence)
-        mecab_sentence.append(" ".join(tokens))
+    tokens = tokenizer.morphs(sentence)
+    mecab_sentence = " ".join(tokens)
 
     return mecab_sentence

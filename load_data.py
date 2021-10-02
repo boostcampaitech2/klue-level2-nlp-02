@@ -80,27 +80,36 @@ def preprocessing_dataset(dataset, entity_flag=0, preprocessing_flag=0, mecab_fl
         new_sentence = sentence_processing(dataset)
         dataset.sentence = new_sentence
 
-    if preprocessing_flag:
+    if preprocessing_flag and mecab_flag:
+        out_dataset = pd.DataFrame({'id': dataset['id'],
+                                    'sentence': [mecab_processing(text_preprocessing(sent)) for sent in dataset['sentence']],
+                                    'subject_entity': [mecab_processing(text_preprocessing(entity)) for entity in subject_entity],
+                                    'object_entity': [mecab_processing(text_preprocessing(entity)) for entity in object_entity],
+                                    'label': dataset['label'], })
+        print('Finish preprocessing and mecab !!!')
+
+    elif preprocessing_flag and not mecab_flag:
         out_dataset = pd.DataFrame({'id': dataset['id'],
                                     'sentence': [text_preprocessing(sent) for sent in dataset['sentence']],
                                     'subject_entity': [text_preprocessing(entity) for entity in subject_entity],
                                     'object_entity': [text_preprocessing(entity) for entity in object_entity],
                                     'label': dataset['label'], })
         print('Finish data preprocessing!!!')
+
+    elif mecab_flag and not preprocessing_flag:
+        out_dataset = pd.DataFrame({'id': dataset['id'],
+                                    'sentence': [mecab_processing(sent) for sent in dataset['sentence']],
+                                    'subject_entity': [mecab_processing(entity) for entity in subject_entity],
+                                    'object_entity': [mecab_processing(entity) for entity in object_entity],
+                                    'label': dataset['label'], })
+        print('Finish mecab preprocessing!!!')
     else:
         out_dataset = pd.DataFrame({'id': dataset['id'],
                                     'sentence': (dataset['sentence']),
                                     'subject_entity': (subject_entity),
                                     'object_entity': (object_entity),
                                     'label': dataset['label'], })
-
-    if mecab_flag:
-        out_dataset = pd.DataFrame({'id': dataset['id'],
-                                    'sentence': mecab_processing(dataset['sentence']),
-                                    'subject_entity': mecab_processing(subject_entity),
-                                    'object_entity': mecab_processing(object_entity),
-                                    'label': dataset['label'], })
-        print('Finish mecab preprocessing!!!')
+        print('None preprocessing')
 
     return out_dataset
 
@@ -114,6 +123,7 @@ def load_data(dataset_dir, entity_flag=0, preprocessing_flag=0, mecab_flag=0):
             ['sentence', 'subject_entity', 'object_entity', 'label'], keep='first')
         # 라벨링이 다른 데이터 제거
         pd_dataset = pd_dataset.drop(index=[6749, 8364, 22258, 277, 25094])
+        print("Finish remove duplicated data")
 
     dataset = preprocessing_dataset(
         pd_dataset, entity_flag, preprocessing_flag, mecab_flag)

@@ -123,6 +123,7 @@ def load_data(dataset_dir, entity_flag=0, preprocessing_flag=0, mecab_flag=0):
             ['sentence', 'subject_entity', 'object_entity', 'label'], keep='first')
         # 라벨링이 다른 데이터 제거
         pd_dataset = pd_dataset.drop(index=[6749, 8364, 22258, 277, 25094])
+        pd_dataset = pd_dataset.reset_index(drop=True)
         print("Finish remove duplicated data")
 
     dataset = preprocessing_dataset(

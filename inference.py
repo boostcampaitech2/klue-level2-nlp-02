@@ -44,6 +44,48 @@ def inference(model, tokenized_sent, device, is_roberta=False):
 
     return np.concatenate(output_pred).tolist(), np.concatenate(output_prob, axis=0).tolist()
 
+def inference_ensemble(model_dir, tokenized_sent, device, is_roberta=False):
+    dataloader = DataLoader(tokenized_sent, batch_size=16, shuffle=False)
+    
+    dirs = os.listdir(model_dir)
+    dirs = sorted(dirs)
+    
+    final_output_prob=[]
+    final_output_pred=[]
+    for i in range(len(dirs)):
+        model_d = os.path.abspath(os.path.join(model_dir, dirs[i]))
+        model = AutoModelForSequenceClassification.from_pretrained(model_d)
+        model.parameters
+        model.to(device)
+        
+        model.eval()
+        fold_prob=[]
+        fold_pred=[]
+        for i1, data in enumerate(tqdm(dataloader)):
+            with torch.no_grad():
+                if is_roberta:
+                    outputs = model(
+                        input_ids=data['input_ids'].to(device),
+                        attention_mask=data['attention_mask'].to(device),
+                    )
+                else:
+                    outputs = model(
+                        input_ids=data['input_ids'].to(device),
+                        attention_mask=data['attention_mask'].to(device),
+                        token_type_ids=data['token_type_ids'].to(device)
+                    )
+            logits = outputs[0]
+            prob = F.softmax(logits, dim=-1).detach().cpu().numpy()
+            logits = logits.detach().cpu().numpy()
+            
+            fold_pred.extend(logits.tolist())
+            fold_prob.append(prob)
+        
+        final_output_pred.append(fold_pred)
+        final_output_prob.append(np.concatenate(fold_prob, axis=0).tolist())
+        
+    return final_output_pred, final_output_prob
+
 
 def num_to_label(label):
     """
@@ -94,15 +136,15 @@ def main(args):
       주어진 dataset csv 파일과 같은 형태일 경우 inference 가능한 코드입니다.
     """
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    # load tokenizer
+#     # load tokenizer
     Tokenizer_NAME = args.PLM
     tokenizer = AutoTokenizer.from_pretrained(Tokenizer_NAME)
 
-    # load my model
+#     # load my model
     model_dir = select_checkpoint(args)
-    model = AutoModelForSequenceClassification.from_pretrained(model_dir)
-    model.parameters
-    model.to(device)
+#     model = AutoModelForSequenceClassification.from_pretrained(model_dir)
+#     model.parameters
+#     model.to(device)
 
     # load test datset
     test_dataset_dir = "/opt/ml/dataset/test/test_data.csv"
@@ -115,11 +157,22 @@ def main(args):
     test_id, test_dataset, test_label = load_test_dataset(
         test_dataset_dir, tokenizer, args.entity_flag, args.preprocessing_flag, args.mecab_flag)
     Re_test_dataset = RE_Dataset(test_dataset, test_label)
-
-    # predict answer
-    pred_answer, output_prob = inference(
+    
+    if args.k_fold:
+        pred_answer, output_prob = inference_ensemble(model_dir, Re_test_dataset, device, is_roberta)  # model에서 class 추론
+        pred_answer = np.mean(pred_answer,axis=0)
+        pred_answer = np.argmax(pred_answer,axis=-1)
+        pred_answer = num_to_label(pred_answer)
+        output_prob = np.mean(output_prob,axis=0).tolist()
+    
+    else:
+        model = AutoModelForSequenceClassification.from_pretrained(model_dir)
+        model.parameters
+        model.to(device)
+        
+        pred_answer, output_prob = inference(
         model, Re_test_dataset, device, is_roberta)  # model에서 class 추론
-    pred_answer = num_to_label(pred_answer)  # 숫자로 된 class를 원래 문자열 라벨로 변환.
+        pred_answer = num_to_label(pred_answer)  # 숫자로 된 class를 원래 문자열 라벨로 변환.
 
     # make csv file with predicted answer
     #########################################################
@@ -147,7 +200,9 @@ if __name__ == '__main__':
         '--preprocessing_flag', default=False, action='store_true', help='Train에 사용했던거랑 똑같이 (default: False)')
     parser.add_argument(
         '--mecab_flag', default=False, action='store_true', help='Train에 사용했던거랑 똑같이 (default: False)')
-
+    
+    parser.add_argument("--k_fold", type=int, default=0, help='not k fold(defalut: 0)')
+    
     args = parser.parse_args()
     print(args)
 

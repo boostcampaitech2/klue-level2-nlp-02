@@ -100,7 +100,7 @@ def train(args):
             
             tokenized_train = tokenized_dataset(train_lists, tokenizer)  # UNK token count
             tokenized_valid = tokenized_dataset(valid_lists, tokenizer)  # UNK token count
-            RE_train_dataset = RE_Dataset(tokenized_train, train_labels, args.seed)
+            RE_train_dataset = RE_Dataset(tokenized_train, train_labels, args.eval_ratio, args.seed)
             RE_dev_dataset = RE_Dataset(tokenized_valid, valid_labels, args.eval_ratio, args.seed)
             
             load_dotenv(dotenv_path=args.dotenv_path)

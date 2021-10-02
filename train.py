@@ -160,6 +160,7 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
     
     if args.add_unk_token :
         model.resize_token_embeddings(tokenizer.vocab_size + added_token_num)
+
     print(model.config)
     model.parameters
     model.to(device)
@@ -242,12 +243,18 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
         '/', '-') + '-' + args.wandb_unique_tag.replace('/', '-') + "/" + str(fold_idx))
         os.makedirs(model_save_pth, exist_ok=True)
         model.save_pretrained(model_save_pth)
+
+        if args.add_unk_token :
+            tokenizer.save_pretrained(model_save_pth+'/tokenizer')
     
     else:
         model_save_pth = os.path.join(args.save_dir, args.PLM.replace(
         '/', '-') + '-' + args.wandb_unique_tag.replace('/', '-'))
         os.makedirs(model_save_pth, exist_ok=True)
         model.save_pretrained(model_save_pth)
+        
+        if args.add_unk_token :
+            tokenizer.save_pretrained(model_save_pth+'/tokenizer')
 
 
 

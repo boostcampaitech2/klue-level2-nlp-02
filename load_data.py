@@ -15,6 +15,7 @@ class RE_Dataset(Dataset):
 
     def __init__(self, pair_dataset, labels,
                  val_ratio=0.2, seed=2):
+        random.seed(seed)
         self.pair_dataset = pair_dataset
         self.labels = labels
         self.val_ratio = val_ratio
@@ -60,8 +61,10 @@ def text_preprocessing(sentence, preprocessing_cmb):
     if 0 in preprocessing_cmb :
         sentence = remove_special_char(sentence)
     if 1 in preprocessing_cmb :
-        sentence = substitution_date(sentence)
+        sentence = substitution_special_char(sentence)
     if 2 in preprocessing_cmb :
+        sentence = substitution_date(sentence)
+    if 3 in preprocessing_cmb :
         sentence = add_space_char(sentence)
     return sentence
 
@@ -97,6 +100,38 @@ def preprocessing_dataset(dataset, entity_flag=0, preprocessing_cmb=None, mecab_
                                     'object_entity': (object_entity),
                                     'label': dataset['label'], })
         print('None text preprocessing')
+    
+    if preprocessing_cmb != None and mecab_flag:
+        out_dataset = pd.DataFrame({'id': dataset['id'],
+                                    'sentence': [mecab_processing(text_preprocessing(sent, preprocessing_cmb)) for sent in dataset['sentence']],
+                                    'subject_entity': [mecab_processing(text_preprocessing(entity, preprocessing_cmb)) for entity in subject_entity],
+                                    'object_entity': [mecab_processing(text_preprocessing(entity, preprocessing_cmb)) for entity in object_entity],
+                                    'label': dataset['label'], })
+        print('Finish preprocessing and mecab !!!')
+
+    elif preprocessing_cmb != None and not mecab_flag:
+        out_dataset = pd.DataFrame({'id': dataset['id'],
+                                    'sentence': [text_preprocessing(sent, preprocessing_cmb) for sent in dataset['sentence']],
+                                    'subject_entity': [text_preprocessing(entity, preprocessing_cmb) for entity in subject_entity],
+                                    'object_entity': [text_preprocessing(entity, preprocessing_cmb) for entity in object_entity],
+                                    'label': dataset['label'], })
+        print('Finish data preprocessing!!!')
+
+    elif mecab_flag and preprocessing_cmb == None :
+        out_dataset = pd.DataFrame({'id': dataset['id'],
+                                    'sentence': [mecab_processing(sent) for sent in dataset['sentence']],
+                                    'subject_entity': [mecab_processing(entity) for entity in subject_entity],
+                                    'object_entity': [mecab_processing(entity) for entity in object_entity],
+                                    'label': dataset['label'], })
+        print('Finish mecab preprocessing!!!')
+    else:
+        out_dataset = pd.DataFrame({'id': dataset['id'],
+                                    'sentence': (dataset['sentence']),
+                                    'subject_entity': (subject_entity),
+                                    'object_entity': (object_entity),
+                                    'label': dataset['label'], })
+        print('None preprocessing')
+
     return out_dataset
 
 

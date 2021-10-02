@@ -81,8 +81,7 @@ def label_to_num(label):
 
 def train(args):
     # load model and tokenizer
-    MODEL_NAME = args.PLM
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    tokenizer = AutoTokenizer.from_pretrained(args.PLM)
 
     # dynamic padding
     dynamic_padding = DataCollatorWithPadding(tokenizer=tokenizer)
@@ -95,6 +94,13 @@ def train(args):
     if args.k_fold:
         skf = StratifiedKFold(n_splits=args.k_fold, shuffle=True)
         
+        added_token_num = 0
+        if args.add_unk_token :
+            tokenizer, added_token_num = add_unk_tokens(list(train_dataset['sentence']),
+                                                        list(train_dataset['subject_entity']),
+                                                        list(train_dataset['object_entity']),
+                                                        tokenizer)
+                                                        
         for fold_idx, (train_idx, valid_idx) in enumerate(skf.split(train_dataset,train_label),1):
             train_lists, train_labels = train_dataset.loc[train_idx], list(np.array(train_label)[train_idx])
             valid_lists, valid_labels = train_dataset.loc[valid_idx], list(np.array(train_label)[valid_idx])
@@ -122,6 +128,7 @@ def train(args):
         # tokenizing dataset
         tokenized_train = tokenized_dataset(train_dataset, tokenizer)  # UNK token count
         
+        added_token_num = 0
         if args.add_unk_token :
             tokenizer, added_token_num = add_unk_tokens(list(train_dataset['sentence']),
                                                         list(train_dataset['subject_entity']),
@@ -130,10 +137,11 @@ def train(args):
 
         RE_train_dataset = RE_Dataset(tokenized_train, train_label, args.eval_ratio, args.seed)
         
-        train_model(args, RE_train_dataset, RE_dev_dataset=0, fold_idx=0, dynamic_padding=dynamic_padding, tokenizer=tokenizer)
+        train_model(args, RE_train_dataset, RE_dev_dataset=0, fold_idx=0, dynamic_padding=dynamic_padding,
+                     tokenizer=tokenizer, added_token_num=added_token_num)
         
     
-def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,tokenizer):
+def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,tokenizer,added_token_num):
     
     # Split validation dataset
     if args.eval_flag == True and args.k_fold==0:
@@ -147,7 +155,7 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
     model_config.num_labels = 30
 
     model = AutoModelForSequenceClassification.from_pretrained(
-        MODEL_NAME, ignore_mismatched_sizes=args.ignore_mismatched, config=model_config)
+        args.PLM, ignore_mismatched_sizes=args.ignore_mismatched, config=model_config)
     
     if args.add_unk_token :
         model.resize_token_embeddings(tokenizer.vocab_size + added_token_num)

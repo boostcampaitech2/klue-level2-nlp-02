@@ -4,6 +4,7 @@ import pandas as pd
 import torch
 import sklearn
 import numpy as np
+from sklearn.model_selection import train_test_split, StratifiedKFold
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
 from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer, DataCollatorWithPadding
 from load_data import *
@@ -88,46 +89,73 @@ def train(args):
 
     # load dataset
     train_dataset = load_data("/opt/ml/dataset/train/train.csv",
-                              args.entity_flag, args.preprocessing_cmb)
+                              args.entity_flag, args.preprocessing_cmb, args.mecab_flag)
     train_label = label_to_num(train_dataset['label'].values)
+    
+    if args.k_fold:
+        skf = StratifiedKFold(n_splits=args.k_fold, shuffle=True)
+        
+        for fold_idx, (train_idx, valid_idx) in enumerate(skf.split(train_dataset,train_label),1):
+            train_lists, train_labels = train_dataset.loc[train_idx], list(np.array(train_label)[train_idx])
+            valid_lists, valid_labels = train_dataset.loc[valid_idx], list(np.array(train_label)[valid_idx])
+            
+            tokenized_train = tokenized_dataset(train_lists, tokenizer)  # UNK token count
+            tokenized_valid = tokenized_dataset(valid_lists, tokenizer)  # UNK token count
+            RE_train_dataset = RE_Dataset(tokenized_train, train_labels, args.eval_ratio, args.seed)
+            RE_dev_dataset = RE_Dataset(tokenized_valid, valid_labels, args.eval_ratio, args.seed)
+            
+            load_dotenv(dotenv_path=args.dotenv_path)
+            WANDB_AUTH_KEY = os.getenv('WANDB_AUTH_KEY')
+            wandb.login(key=WANDB_AUTH_KEY)
+            
+            wandb.init(
+                entity="klue-level2-nlp-02",
+                project="Relation-Extraction_1001",
+                name=args.wandb_unique_tag+"_"+str(fold_idx),
+                group=args.PLM+"-k_fold")
+            
+            wandb.config.update(args)
+            train_model(args=args,RE_train_dataset=RE_train_dataset, RE_dev_dataset=RE_dev_dataset, fold_idx=fold_idx, dynamic_padding=dynamic_padding, tokenizer=tokenizer)
+            wandb.finish()
+            
+    else:
+        # tokenizing dataset
+        tokenized_train = tokenized_dataset(train_dataset, tokenizer)  # UNK token count
+        
+        if args.add_unk_token :
+            tokenizer, added_token_num = add_unk_tokens(list(train_dataset['sentence']),
+                                                        list(train_dataset['subject_entity']),
+                                                        list(train_dataset['object_entity']),
+                                                        tokenizer)
 
-    # tokenizing dataset
-    tokenized_train = tokenized_dataset(
-        train_dataset, tokenizer, is_inference=False)  # UNK token count
-
-    if args.add_unk_token :
-        tokenizer, added_token_num = add_unk_tokens(list(train_dataset['sentence']),
-                                                    list(train_dataset['subject_entity']),
-                                                    list(train_dataset['object_entity']),
-                                                    tokenizer)
-                                                    
-    RE_train_dataset = RE_Dataset(
-        tokenized_train, train_label, args.eval_ratio,
-        args.seed)
-
+        RE_train_dataset = RE_Dataset(tokenized_train, train_label, args.eval_ratio, args.seed)
+        
+        train_model(args, RE_train_dataset, RE_dev_dataset=0, fold_idx=0, dynamic_padding=dynamic_padding, tokenizer=tokenizer)
+        
+    
+def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,tokenizer):
+    
     # Split validation dataset
-    if args.eval_flag :
+    if args.eval_flag == True and args.k_fold==0:
         RE_train_dataset, RE_dev_dataset = RE_train_dataset.split()
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
+    
     print(device)
     # setting model hyperparameter
-    model_config = AutoConfig.from_pretrained(MODEL_NAME)
+    model_config = AutoConfig.from_pretrained(args.PLM)
     model_config.num_labels = 30
 
     model = AutoModelForSequenceClassification.from_pretrained(
         MODEL_NAME, ignore_mismatched_sizes=args.ignore_mismatched, config=model_config)
+    
     if args.add_unk_token :
         model.resize_token_embeddings(tokenizer.vocab_size + added_token_num)
     print(model.config)
     model.parameters
     model.to(device)
-
-    # 사용한 option 외에도 다양한 option들이 있습니다.
-    # https://huggingface.co/transformers/main_classes/trainer.html#trainingarguments 참고해주세요.
-
-    if args.eval_flag == True:
+    
+    if args.eval_flag == True or args.k_fold:
         training_args = TrainingArguments(
             output_dir='./results',          # output directory
             save_total_limit=5,              # number of total save model.
@@ -158,7 +186,7 @@ def train(args):
             train_dataset=RE_train_dataset,         # training dataset
             eval_dataset=RE_dev_dataset,             # evaluation dataset
             compute_metrics=compute_metrics,         # define metrics function
-            data_collator=dynamic_padding,
+            #data_collator=dynamic_padding,
             tokenizer=tokenizer,
         )
 
@@ -199,27 +227,38 @@ def train(args):
 
     # train model
     trainer.train()
-    model_save_pth = os.path.join(args.save_dir, args.PLM.replace(
+    
+    if args.k_fold:
+        model_save_pth = os.path.join(args.save_dir, args.PLM.replace(
+        '/', '-') + '-' + args.wandb_unique_tag.replace('/', '-') + "/" + str(fold_idx))
+        os.makedirs(model_save_pth, exist_ok=True)
+        model.save_pretrained(model_save_pth)
+    
+    else:
+        model_save_pth = os.path.join(args.save_dir, args.PLM.replace(
         '/', '-') + '-' + args.wandb_unique_tag.replace('/', '-'))
-    os.makedirs(model_save_pth, exist_ok=True)
-    model.save_pretrained(model_save_pth)
+        os.makedirs(model_save_pth, exist_ok=True)
+        model.save_pretrained(model_save_pth)
+
 
 
 def main(args):
-    load_dotenv(dotenv_path=args.dotenv_path)
-    WANDB_AUTH_KEY = os.getenv('WANDB_AUTH_KEY')
-    wandb.login(key=WANDB_AUTH_KEY)
+    if args.k_fold==0:
+        load_dotenv(dotenv_path=args.dotenv_path)
+        WANDB_AUTH_KEY = os.getenv('WANDB_AUTH_KEY')
+        wandb.login(key=WANDB_AUTH_KEY)
 
-    wandb.init(
-        entity="klue-level2-nlp-02",
-        project="Relation-Extraction_1001",
-        name=args.wandb_unique_tag,
-        group=args.PLM+'_pp_test')
-    wandb.config.update(args)
+        wandb.init(
+            entity="klue-level2-nlp-02",
+            project="Relation-Extraction_1001",
+            name=args.wandb_unique_tag,
+            group=args.PLM)
+        wandb.config.update(args)
+        train(args)
+        wandb.finish()
+    else:
+        train(args)
 
-    train(args)
-    wandb.finish()
- 
 
 def seed_everything(seed):
     torch.manual_seed(seed)
@@ -277,11 +316,17 @@ if __name__ == '__main__':
                         help='add Entity flag (default: False)')
     # parser.add_argument('--preprocessing_flag', default=False, action='store_true',
     #                     help='input text pre-processing (default: False)')
-    parser.add_argument('--preprocessing_cmb', nargs='+', help='<Required> Set flag (example: 0 1 2)')
+    parser.add_argument('--preprocessing_cmb', nargs='+',
+                        help='<Required> Set flag (example: 0 1 2)')
 
+    parser.add_argument('--mecab_flag', default=False, action='store_true',
+                        help='input text pre-processing (default: False)')
+    
     parser.add_argument('--add_unk_token', default=False, action='store_true',
-                        help='add unknown token in vocab (default: False)')
-
+                    help='add unknown token in vocab (default: False)')
+    
+    parser.add_argument("--k_fold", type=int, default=0, help='not k fold(defalut: 0)')
+    
     args = parser.parse_args()
 
     # Start

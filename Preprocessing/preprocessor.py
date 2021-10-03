@@ -18,7 +18,7 @@ Roberta tokenizer 기준으로 unk token 줄이는 방향의 preprocessing
 """
 
 def remove_special_char(sentence):
-    """ 특수문자 및 독일어 제거, 수정"""
+    """ 독일어, 사우디어, 라틴어 제거 """
     sentence = re.sub(r'[À-ÿ]+','', sentence) # 독일어
     sentence = re.sub(r'[\u0600-\u06FF]+','', sentence)  # 사우디어
     sentence = re.sub(r'[\u00C0-\u02B0]+','', sentence)  # 라틴어

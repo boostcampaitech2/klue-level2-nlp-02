@@ -268,7 +268,7 @@ def main(args):
             entity="klue-level2-nlp-02",
             project="Relation-Extraction_1001",
             name=args.wandb_unique_tag,
-            group=args.PLM+'_pp_test')
+            group=args.PLM)
         wandb.config.update(args)
         train(args)
         wandb.finish()

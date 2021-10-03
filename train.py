@@ -1,10 +1,13 @@
 import pickle as pickle
 import os
 import pandas as pd
+import torch.nn as nn
 import torch
+import torch.nn.functional as F
 import sklearn
 import numpy as np
 from sklearn.model_selection import train_test_split, StratifiedKFold
+from loss import use_criterion
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
 from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer, DataCollatorWithPadding
 from load_data import *
@@ -76,6 +79,19 @@ def label_to_num(label):
         num_label.append(dict_label_to_num[v])
 
     return num_label
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+
+    
+#https://huggingface.co/transformers/main_classes/trainer.html
+class MultilabelTrainer(Trainer):
+    def compute_loss(self, model, inputs, return_outputs=False):
+        labels = inputs.pop("labels") # "labels" in inputs 기능으로 label 가져오기!
+        outputs = model(**inputs) # input으로 모델이 예측!
+        logits = outputs.logits # model 결과값
+        loss_fn = use_criterion(args.criterion)
+        loss = loss_fn(logits, labels)
+        return (loss, outputs) if return_outputs else loss
 
 
 def train(args):
@@ -100,7 +116,7 @@ def train(args):
             
             tokenized_train = tokenized_dataset(train_lists, tokenizer)  # UNK token count
             tokenized_valid = tokenized_dataset(valid_lists, tokenizer)  # UNK token count
-            RE_train_dataset = RE_Dataset(tokenized_train, train_labels, args.eval_ratio, args.seed)
+            RE_train_dataset = RE_Dataset(tokenized_train, train_labels, args.seed)
             RE_dev_dataset = RE_Dataset(tokenized_valid, valid_labels, args.eval_ratio, args.seed)
             
             load_dotenv(dotenv_path=args.dotenv_path)
@@ -125,14 +141,14 @@ def train(args):
         
         train_model(args, RE_train_dataset, RE_dev_dataset=0, fold_idx=0, dynamic_padding=dynamic_padding, tokenizer=tokenizer)
         
-    
+
 def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,tokenizer):
     
     # Split validation dataset
     if args.eval_flag == True and args.k_fold==0:
         RE_train_dataset, RE_dev_dataset = RE_train_dataset.split()
 
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    #device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     
     print(device)
     # setting model hyperparameter
@@ -169,16 +185,29 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
             load_best_model_at_end=True,
             report_to="wandb"
         )
-        trainer = Trainer(
-            # the instantiated 🤗 Transformers model to be trained
-            model=model,
-            args=training_args,                  # training arguments, defined above
-            train_dataset=RE_train_dataset,         # training dataset
-            eval_dataset=RE_dev_dataset,             # evaluation dataset
-            compute_metrics=compute_metrics,         # define metrics function
-            #data_collator=dynamic_padding,
-            tokenizer=tokenizer,
-        )
+        
+        if args.criterion=='default':
+            trainer = Trainer(
+                # the instantiated 🤗 Transformers model to be trained
+                model=model,
+                args=training_args,                  # training arguments, defined above
+                train_dataset=RE_train_dataset,         # training dataset
+                eval_dataset=RE_dev_dataset,             # evaluation dataset
+                compute_metrics=compute_metrics,         # define metrics function
+                #data_collator=dynamic_padding,
+                tokenizer=tokenizer,
+            )
+        else:
+            trainer = MultilabelTrainer(
+                # the instantiated 🤗 Transformers model to be trained
+                model=model,
+                args=training_args,                  # training arguments, defined above
+                train_dataset=RE_train_dataset,         # training dataset
+                eval_dataset=RE_dev_dataset,             # evaluation dataset
+                compute_metrics=compute_metrics,         # define metrics function
+                #data_collator=dynamic_padding,
+                tokenizer=tokenizer,
+            )
 
     else:
         training_args = TrainingArguments(
@@ -204,16 +233,30 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
             load_best_model_at_end=True,
             report_to="wandb"
         )
-        trainer = Trainer(
-            # the instantiated 🤗 Transformers model to be trained
-            model=model,
-            args=training_args,                  # training arguments, defined above
-            train_dataset=RE_train_dataset,         # training dataset
-            eval_dataset=RE_train_dataset,             # evaluation dataset
-            compute_metrics=compute_metrics,         # define metrics function
-            data_collator=dynamic_padding,
-            tokenizer=tokenizer,
-        )
+        
+        if args.criterion=='default':
+            trainer = Trainer(
+                # the instantiated 🤗 Transformers model to be trained
+                model=model,
+                args=training_args,                  # training arguments, defined above
+                train_dataset=RE_train_dataset,         # training dataset
+                eval_dataset=RE_train_dataset,             # evaluation dataset
+                compute_metrics=compute_metrics,         # define metrics function
+                data_collator=dynamic_padding,
+                tokenizer=tokenizer,
+            )
+        
+        else:
+            trainer = MultilabelTrainer(
+                # the instantiated 🤗 Transformers model to be trained
+                model=model,
+                args=training_args,                  # training arguments, defined above
+                train_dataset=RE_train_dataset,         # training dataset
+                eval_dataset=RE_train_dataset,             # evaluation dataset
+                compute_metrics=compute_metrics,         # define metrics function
+                data_collator=dynamic_padding,
+                tokenizer=tokenizer,
+            )
 
     # train model
     trainer.train()
@@ -284,7 +327,7 @@ if __name__ == '__main__':
                         help='ignore mismatched size when load pretrained model')
 
     # Validation
-    parser.add_argument('--eval_flag', default=True, action='store_true',
+    parser.add_argument('--eval_flag', default=False, action='store_true',
                         help='eval flag (default: True)')
     parser.add_argument('--eval_ratio', type=float, default=0.2,
                         help='eval data size ratio (default: 0.2)')
@@ -310,6 +353,7 @@ if __name__ == '__main__':
                         help='input text pre-processing (default: False)')
     
     parser.add_argument("--k_fold", type=int, default=0, help='not k fold(defalut: 0)')
+    parser.add_argument("--criterion", type=str, default='default', help='criterion type: label_smoothing, focal_loss')
     
     args = parser.parse_args()
 

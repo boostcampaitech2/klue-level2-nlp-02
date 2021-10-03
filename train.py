@@ -88,7 +88,8 @@ def train(args):
 
     # load dataset
     train_dataset = load_data("/opt/ml/dataset/train/train.csv",
-                              args.entity_flag, args.preprocessing_cmb, args.mecab_flag)
+                              args.entity_flag, args.preprocessing_cmb, args.mecab_flag,
+                              seed = args.seed, augmentation_flag=args.augmentation_flag)
     train_label = label_to_num(train_dataset['label'].values)
     
     if args.k_fold:
@@ -308,6 +309,8 @@ if __name__ == '__main__':
                         help='evaluation strategy to adopt during training, steps or epoch (default: steps)')
     parser.add_argument('--ignore_mismatched', type=bool, default=False,
                         help='ignore mismatched size when load pretrained model')
+    parser.add_argument('--augmentation_flag', type=bool, default=False,
+                        help="data augmentation by resampling")
 
     # Validation
     parser.add_argument('--eval_flag', default=True, action='store_true',

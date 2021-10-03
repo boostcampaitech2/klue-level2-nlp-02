@@ -1,6 +1,7 @@
 from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, BertTokenizer
 from torch.utils.data import DataLoader
 from load_data import *
+from Preprocessing.preprocessor import EntityPreprocessor, SenPreprocessor, UnkPreprocessor
 import pandas as pd
 import torch
 import torch.nn.functional as F
@@ -100,13 +101,12 @@ def num_to_label(label):
     return origin_label
 
 
-def load_test_dataset(dataset_dir, tokenizer, entity_flag, preprocessing_cmb, mecab_flag):
+def load_test_dataset(dataset_dir, tokenizer, sen_preprocessor, entity_preprocessor):
     """
       test dataset을 불러온 후,
       tokenizing 합니다.
     """
-    test_dataset = load_data(dataset_dir, entity_flag,
-                             preprocessing_cmb, mecab_flag)
+    test_dataset = load_data(dataset_dir, sen_preprocessor, entity_preprocessor)
     test_label = list(map(int, test_dataset['label'].values))
 
     # tokenizing dataset
@@ -145,6 +145,10 @@ def main(args):
     # load test datset
     test_dataset_dir = "/opt/ml/dataset/test/test_data.csv"
 
+    # preprocessor
+    sen_preprocessor = SenPreprocessor(args.preprocessing_cmb, args.mecab_flag)
+    entity_preprocessor = EntityPreprocessor(args.entity_flag)
+
     if args.PLM in ['klue/roberta-base', 'klue/roberta-small', 'klue/roberta-large']:
         is_roberta = True
         if args.add_unk_token :
@@ -154,10 +158,9 @@ def main(args):
     else:
         is_roberta = False
 
-    test_id, test_dataset, test_label = load_test_dataset(
-        test_dataset_dir, tokenizer, args.entity_flag, args.preprocessing_cmb, args.mecab_flag)
+    test_id, test_dataset, test_label = load_test_dataset(test_dataset_dir, tokenizer, sen_preprocessor, entity_preprocessor)
     Re_test_dataset = RE_Dataset(test_dataset, test_label)
-    
+
     if args.k_fold:
         pred_answer, output_prob = inference_ensemble(model_dir, Re_test_dataset, device, is_roberta)  # model에서 class 추론
         pred_answer = np.mean(pred_answer,axis=0)

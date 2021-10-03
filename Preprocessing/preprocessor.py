@@ -28,7 +28,7 @@ class SenPreprocessor :
             if '3' in self.preprocessing_cmb :
                 sentence = self.add_space_char(sentence)
 
-        if self.mecab_flag == 1 :
+        if self.mecab_flag == True :
             sentence = self.mecab_processing(sentence)
 
         return sentence
@@ -150,7 +150,7 @@ class EntityPreprocessor :
         self.entity_flag = entity_flag
 
     def __call__(self, dataset) :
-        if self.entity_flag == 1 :
+        if self.entity_flag == True :
             sen_preprocessed = self.preprocess(dataset)
             dataset.sentence = sen_preprocessed
         return dataset

@@ -96,15 +96,28 @@ def train(args):
         train_dataset, test_dataset = split_data(all_dataset, args.eval_ratio)
 
         train_dataset = aeda_dataset(train_dataset)
-
+        breakpoint()
         train_label = label_to_num(train_dataset['label'].values)
         test_label = label_to_num(test_dataset['label'].values)
 
         tokenized_train = tokenized_dataset(train_dataset, tokenizer)
         tokenized_test = tokenized_dataset(test_dataset, tokenizer)
 
-        RE_train_dataset = RE_Dataset(tokenized_train, train_label)
+        # RE_train_dataset = RE_Dataset(tokenized_train, train_label)
+        # RE_dev_dataset = RE_Dataset(tokenized_test, test_label)
+
+        added_token_num = 0
+        if args.add_unk_token :
+            tokenizer, added_token_num =  unk_preprocessor(list(train_dataset['sentence']),
+                list(train_dataset['subject_entity']),
+                list(train_dataset['object_entity']))
+
+        RE_train_dataset = RE_Dataset(tokenized_train, train_label, args.eval_ratio, args.seed)
         RE_dev_dataset = RE_Dataset(tokenized_test, test_label)
+
+        train_model(args, RE_train_dataset, RE_dev_dataset, fold_idx=0, dynamic_padding=dynamic_padding,
+                     tokenizer=tokenizer, added_token_num=added_token_num)
+        return
     #====================================================================
     else:
         # load dataset
@@ -143,7 +156,6 @@ def train(args):
             train_model(args=args,RE_train_dataset=RE_train_dataset, RE_dev_dataset=RE_dev_dataset, fold_idx=fold_idx,
                                  dynamic_padding=dynamic_padding, tokenizer=tokenizer, added_token_num=added_token_num)
             wandb.finish()
-            
     else:
         # tokenizing dataset
         tokenized_train = tokenized_dataset(train_dataset, tokenizer)  # UNK token count

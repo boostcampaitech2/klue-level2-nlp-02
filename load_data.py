@@ -7,6 +7,8 @@ import random
 import torch
 from tqdm import tqdm
 from torch.utils.data import Dataset, Subset
+from augmentation import *
+
 
 class RE_Dataset(Dataset):
     """ Dataset 구성을 위한 class."""
@@ -80,6 +82,7 @@ def preprocessing_dataset(dataset, sen_preprocessor, entity_preprocessor):
         'label' : dataset['label']}
     )
     return out_dataset
+
 
 
 def load_data(dataset_dir, sen_preprocessor, entity_preprocessor):

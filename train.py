@@ -14,7 +14,7 @@ from pathlib import Path
 import random
 import wandb
 from dotenv import load_dotenv
-
+from augmentation import *
 
 def klue_re_micro_f1(preds, labels):
     """KLUE-RE micro f1 (except no_relation)"""
@@ -89,9 +89,27 @@ def train(args):
     unk_preprocessor = UnkPreprocessor(tokenizer)
     entity_preprocessor = EntityPreprocessor(args.entity_flag)
 
-    # load dataset
-    train_dataset = load_data("/opt/ml/dataset/train/train.csv", sen_preprocessor, entity_preprocessor)
-    train_label = label_to_num(train_dataset['label'].values)
+    #====================================================================
+    if args.aeda_flag:
+        all_dataset = load_data("../dataset/train/train.csv", sen_preprocessor, entity_preprocessor)
+        
+        train_dataset, test_dataset = split_data(all_dataset, args.eval_ratio)
+
+        train_dataset = aeda_dataset(train_dataset)
+
+        train_label = label_to_num(train_dataset['label'].values)
+        test_label = label_to_num(test_dataset['label'].values)
+
+        tokenized_train = tokenized_dataset(train_dataset, tokenizer)
+        tokenized_test = tokenized_dataset(test_dataset, tokenizer)
+
+        RE_train_dataset = RE_Dataset(tokenized_train, train_label)
+        RE_dev_dataset = RE_Dataset(tokenized_test, test_label)
+    #====================================================================
+    else:
+        # load dataset
+        train_dataset = load_data("/opt/ml/dataset/train/train.csv", sen_preprocessor, entity_preprocessor)
+        train_label = label_to_num(train_dataset['label'].values)
     
     if args.k_fold:
         skf = StratifiedKFold(n_splits=args.k_fold, shuffle=True)
@@ -145,7 +163,7 @@ def train(args):
 def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,tokenizer,added_token_num):
     
     # Split validation dataset
-    if args.eval_flag == True and args.k_fold==0:
+    if args.eval_flag == True and args.k_fold==0 and args.aeda_flag == 0:
         RE_train_dataset, RE_dev_dataset = RE_train_dataset.split()
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -342,6 +360,8 @@ if __name__ == '__main__':
                     help='add unknown token in vocab (default: False)')
     
     parser.add_argument("--k_fold", type=int, default=0, help='not k fold(defalut: 0)')
+
+    parser.add_argument('--aeda_flag', type=int, default=0, help='Number of adea agmentations (default: 0)')
     
     args = parser.parse_args()
 

@@ -161,7 +161,7 @@ def main(args):
     # load test datset
     test_dataset_dir = "/opt/ml/dataset/test/test_data.csv"
 
-    if Tokenizer_NAME in ['klue/roberta-base', 'klue/roberta-small', 'klue/roberta-large']:
+    if Tokenizer_NAME in ['klue/roberta-base', 'klue/roberta-small', 'klue/roberta-large', 'xlm-roberta-large']:
         is_roberta = True
     else:
         is_roberta = False

@@ -234,7 +234,9 @@ def train_model(args, RE_train_dataset, RE_dev_dataset, fold_idx, dynamic_paddin
         model_save_pth = os.path.join(args.save_dir, args.PLM.replace(
             '/', '-') + '-' + args.wandb_unique_tag.replace('/', '-') + "/" + str(fold_idx))
         os.makedirs(model_save_pth, exist_ok=True)
-        model.save_pretrained(model_save_pth)
+        torch.save(model.state_dict(), os.path.join(
+            model_save_pth, 'pytorch_model.pt'))
+        # model.save_pretrained(model_save_pth)
 
     else:
         model_save_pth = os.path.join(args.save_dir, args.PLM.replace(

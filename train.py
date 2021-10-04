@@ -89,8 +89,8 @@ def train(args):
     unk_preprocessor = UnkPreprocessor(tokenizer)
     entity_preprocessor = EntityPreprocessor(args.entity_flag)
 
-    #====================================================================
-    if args.aeda_flag:
+    # aeda augmentation
+    if args.aeda_flag and not args.k_fold:
         all_dataset = load_data("../dataset/train/train.csv", sen_preprocessor, entity_preprocessor)
         
         train_dataset, test_dataset = split_data(all_dataset, args.eval_ratio)
@@ -118,7 +118,7 @@ def train(args):
         train_model(args, RE_train_dataset, RE_dev_dataset, fold_idx=0, dynamic_padding=dynamic_padding,
                      tokenizer=tokenizer, added_token_num=added_token_num)
         return
-    #====================================================================
+    
     else:
         # load dataset
         train_dataset = load_data("/opt/ml/dataset/train/train.csv", sen_preprocessor, entity_preprocessor)
@@ -134,11 +134,9 @@ def train(args):
                 list(train_dataset['object_entity']))
                                                         
         for fold_idx, (train_idx, valid_idx) in enumerate(skf.split(train_dataset,train_label),1):
-            if args.aeda:
+            if args.aeda_flag:
                 train_lists = aeda_dataset(train_dataset.loc[train_idx])
                 train_labels = label_to_num(train_lists['label'].values)
-
-                # train_lists, train_labels = train_dataset.loc[train_idx], list(np.array(train_label)[train_idx])
             else:
                 train_lists, train_labels = train_dataset.loc[train_idx], list(np.array(train_label)[train_idx])
 

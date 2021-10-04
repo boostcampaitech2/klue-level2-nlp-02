@@ -27,11 +27,15 @@ def train(args):
     dynamic_padding = DataCollatorWithPadding(tokenizer=tokenizer)
 
     # load dataset
-    train_dataset = load_lm_data("/opt/ml/dataset/train/train.csv")
+    if args.use_pem:
+        train_dataset = load_data("/opt/ml/dataset/train/train.csv", entity_flag=True, preprocessing_flag=True, mecab_flag=True)
+        # tokenizing dataset
+        tokenized_train = tokenized_dataset(train_dataset, tokenizer)
+    else:
+        train_dataset = load_lm_data("/opt/ml/dataset/train/train.csv")
+        # tokenizing dataset
+        tokenized_train = tokenized_lm_dataset(train_dataset, tokenizer)
     
-    # tokenizing dataset
-    tokenized_train = tokenized_lm_dataset(
-        train_dataset, tokenizer)
     LM_train_dataset = LM_Dataset(
         tokenized_train, tokenizer)
 
@@ -136,10 +140,12 @@ if __name__ == '__main__':
                         help='evaluation strategy to adopt during training, steps or epoch (default: steps)')
     parser.add_argument('--ignore_mismatched', type=bool, default=False,
                         help='ignore mismatched size when load pretrained model')
+    parser.add_argument('--use_pem', default=False, action='store_true',
+                        help='whether or not use preprocessing, entity, and mecab')
 
     # Validation
-    parser.add_argument('--eval_flag', action='store_false',
-                        default=True, help='eval flag (default: True)')
+    parser.add_argument('--eval_flag', action='store_true',
+                        default=False, help='eval flag (default: False)')
     parser.add_argument('--eval_ratio', type=float, default=0.2,
                         help='eval data size ratio (default: 0.2)')
     parser.add_argument('--eval_batch_size', type=int,

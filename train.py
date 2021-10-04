@@ -134,7 +134,14 @@ def train(args):
                 list(train_dataset['object_entity']))
                                                         
         for fold_idx, (train_idx, valid_idx) in enumerate(skf.split(train_dataset,train_label),1):
-            train_lists, train_labels = train_dataset.loc[train_idx], list(np.array(train_label)[train_idx])
+            if args.aeda:
+                train_lists = aeda_dataset(train_dataset.loc[train_idx])
+                train_labels = label_to_num(train_lists['label'].values)
+
+                # train_lists, train_labels = train_dataset.loc[train_idx], list(np.array(train_label)[train_idx])
+            else:
+                train_lists, train_labels = train_dataset.loc[train_idx], list(np.array(train_label)[train_idx])
+
             valid_lists, valid_labels = train_dataset.loc[valid_idx], list(np.array(train_label)[valid_idx])
             
             tokenized_train = tokenized_dataset(train_lists, tokenizer)  # UNK token count

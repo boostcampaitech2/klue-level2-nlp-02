@@ -7,13 +7,9 @@ import random
 import torch
 from tqdm import tqdm
 from torch.utils.data import Dataset, Subset
-from Preprocessing.preprocessor import *
-import random
-
 
 class RE_Dataset(Dataset):
     """ Dataset 구성을 위한 class."""
-
     def __init__(self, pair_dataset, labels,
                  val_ratio=0.2, seed=2):
         random.seed(seed)
@@ -58,72 +54,36 @@ class RE_Dataset(Dataset):
         return train_dset, val_dset
 
 
-def text_preprocessing(sentence, preprocessing_cmb):
-    if '0' in preprocessing_cmb :
-        sentence = remove_special_char(sentence)
-    if '1' in preprocessing_cmb :
-        sentence = substitution_special_char(sentence)
-    if '2' in preprocessing_cmb :
-        sentence = substitution_date(sentence)
-    if '3' in preprocessing_cmb :
-        sentence = add_space_char(sentence)
-    return sentence
-
-
-def preprocessing_dataset(dataset, entity_flag=0, preprocessing_cmb=None, mecab_flag=0):
+def preprocessing_dataset(dataset, sen_preprocessor, entity_preprocessor):
     """ 처음 불러온 csv 파일을 원하는 형태의 DataFrame으로 변경 시켜줍니다."""
     subject_entity = []
     object_entity = []
-
     # sentence에 entity 속성 추가
     for i, j in zip(dataset['subject_entity'], dataset['object_entity']):
-        # i = eval(i)['word']
-        # j = eval(j)['word']
         i = i['word']
         j = j['word']
 
         subject_entity.append(i)
         object_entity.append(j)
 
-    if entity_flag:
-        new_sentence = sentence_processing(dataset)
-        dataset.sentence = new_sentence
+    # Data Sentence Entity processor
+    dataset = entity_preprocessor(dataset)
 
-    if preprocessing_cmb != None and mecab_flag:
-        out_dataset = pd.DataFrame({'id': dataset['id'],
-                                    'sentence': [mecab_processing(text_preprocessing(sent, preprocessing_cmb)) for sent in dataset['sentence']],
-                                    'subject_entity': [mecab_processing(text_preprocessing(entity, preprocessing_cmb)) for entity in subject_entity],
-                                    'object_entity': [mecab_processing(text_preprocessing(entity, preprocessing_cmb)) for entity in object_entity],
-                                    'label': dataset['label'], })
-        print('Finish preprocessing and mecab !!!')
+    # Sentence Preprocessor
+    sen_data = [sen_preprocessor(sen) for sen in dataset['sentence']]
+    subject_data = [sen_preprocessor(sub) for sub in subject_entity]
+    object_data = [sen_preprocessor(obj) for obj in object_entity]
 
-    elif preprocessing_cmb != None and not mecab_flag:
-        out_dataset = pd.DataFrame({'id': dataset['id'],
-                                    'sentence': [text_preprocessing(sent, preprocessing_cmb) for sent in dataset['sentence']],
-                                    'subject_entity': [text_preprocessing(entity, preprocessing_cmb) for entity in subject_entity],
-                                    'object_entity': [text_preprocessing(entity, preprocessing_cmb) for entity in object_entity],
-                                    'label': dataset['label'], })
-        print('Finish data preprocessing!!!')
-
-    elif mecab_flag and preprocessing_cmb == None :
-        out_dataset = pd.DataFrame({'id': dataset['id'],
-                                    'sentence': [mecab_processing(sent) for sent in dataset['sentence']],
-                                    'subject_entity': [mecab_processing(entity) for entity in subject_entity],
-                                    'object_entity': [mecab_processing(entity) for entity in object_entity],
-                                    'label': dataset['label'], })
-        print('Finish mecab preprocessing!!!')
-    else:
-        out_dataset = pd.DataFrame({'id': dataset['id'],
-                                    'sentence': (dataset['sentence']),
-                                    'subject_entity': (subject_entity),
-                                    'object_entity': (object_entity),
-                                    'label': dataset['label'], })
-        print('None preprocessing')
-
+    out_dataset = pd.DataFrame({'id': dataset['id'],
+        'sentence': sen_data,
+        'subject_entity' : subject_data,
+        'object_entity' : object_data,
+        'label' : dataset['label']}
+    )
     return out_dataset
 
 
-def load_data(dataset_dir, entity_flag=0, preprocessing_flag=None, mecab_flag=0, augmentation_flag=False):
+def load_data(dataset_dir, sen_preprocessor, entity_preprocessor, augmentation_flag=None):
     """ csv 파일을 경로에 맡게 불러 옵니다. """
     pd_dataset = pd.read_csv(dataset_dir)
     
@@ -143,16 +103,13 @@ def load_data(dataset_dir, entity_flag=0, preprocessing_flag=None, mecab_flag=0,
     #단 특정 subject_object_type은 data가 1개이므로, 이 경우 임의로 값 지정
     if augmentation_flag is True:
         pd_dataset = augmentation_by_resampling(pd_dataset)
-    
-    # dataset = preprocessing_dataset(
-        # pd_dataset, entity_flag, preprocessing_flag, mecab_flag)
-    # return dataset
-    return pd_dataset
+
+    dataset = preprocessing_dataset(pd_dataset, sen_preprocessor, entity_preprocessor)
+    return dataset
 
 
 def tokenized_dataset(dataset, tokenizer, is_inference=False):
     """ tokenizer에 따라 sentence를 tokenizing 합니다."""
-
     concat_entity = []
     for e01, e02 in zip(dataset['subject_entity'], dataset['object_entity']):
         temp = ''

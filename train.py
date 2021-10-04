@@ -8,11 +8,9 @@ from sklearn.model_selection import train_test_split, StratifiedKFold
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
 from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer, DataCollatorWithPadding
 from load_data import *
-from Preprocessing.preprocessor import add_unk_tokens
-
+from Preprocessing.preprocessor import EntityPreprocessor, SenPreprocessor, UnkPreprocessor
 import argparse
 from pathlib import Path
-
 import random
 import wandb
 from dotenv import load_dotenv
@@ -86,10 +84,13 @@ def train(args):
     # dynamic padding
     dynamic_padding = DataCollatorWithPadding(tokenizer=tokenizer)
 
+    # Preprocessor
+    sen_preprocessor = SenPreprocessor(args.preprocessing_cmb, args.mecab_flag)
+    unk_preprocessor = UnkPreprocessor(tokenizer)
+    entity_preprocessor = EntityPreprocessor(args.entity_flag)
+
     # load dataset
-    train_dataset = load_data("/opt/ml/dataset/train/train.csv",
-                              args.entity_flag, args.preprocessing_cmb, args.mecab_flag,
-                              augmentation_flag=args.augmentation_flag)
+    train_dataset = load_data("/opt/ml/dataset/train/train.csv", sen_preprocessor, entity_preprocessor, args.augmentation_flag)
     train_label = label_to_num(train_dataset['label'].values)
     import pdb;pdb.set_trace()
     
@@ -98,10 +99,9 @@ def train(args):
         
         added_token_num = 0
         if args.add_unk_token :
-            tokenizer, added_token_num = add_unk_tokens(list(train_dataset['sentence']),
-                                                        list(train_dataset['subject_entity']),
-                                                        list(train_dataset['object_entity']),
-                                                        tokenizer)
+            tokenizer, added_token_num =  unk_preprocessor(list(train_dataset['sentence']),
+                list(train_dataset['subject_entity']),
+                list(train_dataset['object_entity']))
                                                         
         for fold_idx, (train_idx, valid_idx) in enumerate(skf.split(train_dataset,train_label),1):
             train_lists, train_labels = train_dataset.loc[train_idx], list(np.array(train_label)[train_idx])
@@ -133,10 +133,9 @@ def train(args):
         
         added_token_num = 0
         if args.add_unk_token :
-            tokenizer, added_token_num = add_unk_tokens(list(train_dataset['sentence']),
-                                                        list(train_dataset['subject_entity']),
-                                                        list(train_dataset['object_entity']),
-                                                        tokenizer)
+            tokenizer, added_token_num =  unk_preprocessor(list(train_dataset['sentence']),
+                list(train_dataset['subject_entity']),
+                list(train_dataset['object_entity']))
 
         RE_train_dataset = RE_Dataset(tokenized_train, train_label, args.eval_ratio, args.seed)
         

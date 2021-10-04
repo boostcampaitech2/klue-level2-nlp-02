@@ -144,9 +144,10 @@ def load_data(dataset_dir, entity_flag=0, preprocessing_flag=None, mecab_flag=0,
     if augmentation_flag is True:
         pd_dataset = augmentation_by_resampling(pd_dataset)
     
-    dataset = preprocessing_dataset(
-        pd_dataset, entity_flag, preprocessing_flag, mecab_flag)
-    return dataset
+    # dataset = preprocessing_dataset(
+        # pd_dataset, entity_flag, preprocessing_flag, mecab_flag)
+    # return dataset
+    return pd_dataset
 
 
 def tokenized_dataset(dataset, tokenizer, is_inference=False):

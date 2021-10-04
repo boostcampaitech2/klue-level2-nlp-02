@@ -89,8 +89,9 @@ def train(args):
     # load dataset
     train_dataset = load_data("/opt/ml/dataset/train/train.csv",
                               args.entity_flag, args.preprocessing_cmb, args.mecab_flag,
-                              seed = args.seed, augmentation_flag=args.augmentation_flag)
+                              augmentation_flag=args.augmentation_flag)
     train_label = label_to_num(train_dataset['label'].values)
+    import pdb;pdb.set_trace()
     
     if args.k_fold:
         skf = StratifiedKFold(n_splits=args.k_fold, shuffle=True)
@@ -269,7 +270,7 @@ def main(args):
             entity="klue-level2-nlp-02",
             project="Relation-Extraction_1001",
             name=args.wandb_unique_tag,
-            group=args.PLM+'_pp_test')
+            group=args.PLM+'_cy_test')
         wandb.config.update(args)
         train(args)
         wandb.finish()

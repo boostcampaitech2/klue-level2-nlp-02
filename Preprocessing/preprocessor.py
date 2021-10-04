@@ -90,8 +90,7 @@ def add_unk_tokens(sent:List, sub:List, obj:List, tokenizer) :
 def sentence_processing(data):
     new_sentence = []
     for row in tqdm(data.values):
-        sentence, subject_entity, object_entity = row[1], eval(
-            row[2]), eval(row[3])
+        sentence, subject_entity, object_entity = row[1], row[2], row[3]
         sub_start_idx, sub_end_idx, sub_type = subject_entity[
             'start_idx'], subject_entity['end_idx'], subject_entity['type']
         ob_start_idx, ob_end_idx, ob_type = object_entity[

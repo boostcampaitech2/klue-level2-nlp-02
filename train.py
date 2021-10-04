@@ -8,10 +8,9 @@ from sklearn.model_selection import train_test_split, StratifiedKFold
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
 from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer, DataCollatorWithPadding
 from load_data import *
-
+from Preprocessing.preprocessor import EntityPreprocessor, SenPreprocessor, UnkPreprocessor
 import argparse
 from pathlib import Path
-
 import random
 import wandb
 from dotenv import load_dotenv
@@ -80,35 +79,38 @@ def label_to_num(label):
 
 def train(args):
     # load model and tokenizer
-    MODEL_NAME = args.PLM
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    tokenizer = AutoTokenizer.from_pretrained(args.PLM)
 
     # dynamic padding
     dynamic_padding = DataCollatorWithPadding(tokenizer=tokenizer)
 
+    # Preprocessor
+    sen_preprocessor = SenPreprocessor(args.preprocessing_cmb, args.mecab_flag)
+    unk_preprocessor = UnkPreprocessor(tokenizer)
+    entity_preprocessor = EntityPreprocessor(args.entity_flag)
+
     # load dataset
-    train_dataset = load_data("/opt/ml/dataset/train/train.csv",
-                              args.entity_flag, args.preprocessing_flag, args.mecab_flag)
+    train_dataset = load_data("/opt/ml/dataset/train/train.csv", sen_preprocessor, entity_preprocessor)
     train_label = label_to_num(train_dataset['label'].values)
 
     if args.k_fold:
         skf = StratifiedKFold(n_splits=args.k_fold, shuffle=True)
-
-        for fold_idx, (train_idx, valid_idx) in enumerate(skf.split(train_dataset, train_label), 1):
-            train_lists, train_labels = train_dataset.loc[train_idx], list(
-                np.array(train_label)[train_idx])
-            valid_lists, valid_labels = train_dataset.loc[valid_idx], list(
-                np.array(train_label)[valid_idx])
-
-            tokenized_train = tokenized_dataset(
-                train_lists, tokenizer)  # UNK token count
-            tokenized_valid = tokenized_dataset(
-                valid_lists, tokenizer)  # UNK token count
-            RE_train_dataset = RE_Dataset(
-                tokenized_train, train_labels, args.eval_ratio, args.seed)
-            RE_dev_dataset = RE_Dataset(
-                tokenized_valid, valid_labels, args.eval_ratio, args.seed)
-
+        
+        added_token_num = 0
+        if args.add_unk_token :
+            tokenizer, added_token_num =  unk_preprocessor(list(train_dataset['sentence']),
+                list(train_dataset['subject_entity']),
+                list(train_dataset['object_entity']))
+                                                        
+        for fold_idx, (train_idx, valid_idx) in enumerate(skf.split(train_dataset,train_label),1):
+            train_lists, train_labels = train_dataset.loc[train_idx], list(np.array(train_label)[train_idx])
+            valid_lists, valid_labels = train_dataset.loc[valid_idx], list(np.array(train_label)[valid_idx])
+            
+            tokenized_train = tokenized_dataset(train_lists, tokenizer)  # UNK token count
+            tokenized_valid = tokenized_dataset(valid_lists, tokenizer)  # UNK token count
+            RE_train_dataset = RE_Dataset(tokenized_train, train_labels, args.eval_ratio, args.seed)
+            RE_dev_dataset = RE_Dataset(tokenized_valid, valid_labels, args.eval_ratio, args.seed)
+            
             load_dotenv(dotenv_path=args.dotenv_path)
             WANDB_AUTH_KEY = os.getenv('WANDB_AUTH_KEY')
             wandb.login(key=WANDB_AUTH_KEY)
@@ -120,24 +122,28 @@ def train(args):
                 group=args.PLM+"-k_fold")
 
             wandb.config.update(args)
-            train_model(args=args, RE_train_dataset=RE_train_dataset, RE_dev_dataset=RE_dev_dataset,
-                        fold_idx=fold_idx, dynamic_padding=dynamic_padding, tokenizer=tokenizer)
+            train_model(args=args,RE_train_dataset=RE_train_dataset, RE_dev_dataset=RE_dev_dataset, fold_idx=fold_idx,
+                                 dynamic_padding=dynamic_padding, tokenizer=tokenizer, added_token_num=added_token_num)
             wandb.finish()
 
     else:
         # tokenizing dataset
-        tokenized_train = tokenized_dataset(
-            train_dataset, tokenizer)  # UNK token count
+        tokenized_train = tokenized_dataset(train_dataset, tokenizer)  # UNK token count
+        
+        added_token_num = 0
+        if args.add_unk_token :
+            tokenizer, added_token_num =  unk_preprocessor(list(train_dataset['sentence']),
+                list(train_dataset['subject_entity']),
+                list(train_dataset['object_entity']))
 
-        RE_train_dataset = RE_Dataset(
-            tokenized_train, train_label, args.eval_ratio, args.seed)
-
-        train_model(args, RE_train_dataset, RE_dev_dataset=0, fold_idx=0,
-                    dynamic_padding=dynamic_padding, tokenizer=tokenizer)
-
-
-def train_model(args, RE_train_dataset, RE_dev_dataset, fold_idx, dynamic_padding, tokenizer):
-
+        RE_train_dataset = RE_Dataset(tokenized_train, train_label, args.eval_ratio, args.seed)
+        
+        train_model(args, RE_train_dataset, RE_dev_dataset=0, fold_idx=0, dynamic_padding=dynamic_padding,
+                     tokenizer=tokenizer, added_token_num=added_token_num)
+        
+    
+def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,tokenizer,added_token_num):
+    
     # Split validation dataset
     if args.eval_flag == True and args.k_fold == 0:
         RE_train_dataset, RE_dev_dataset = RE_train_dataset.split()
@@ -151,6 +157,10 @@ def train_model(args, RE_train_dataset, RE_dev_dataset, fold_idx, dynamic_paddin
 
     model = AutoModelForSequenceClassification.from_pretrained(
         args.PLM, ignore_mismatched_sizes=args.ignore_mismatched, config=model_config)
+    
+    if args.add_unk_token :
+        model.resize_token_embeddings(tokenizer.vocab_size + added_token_num)
+
     print(model.config)
     model.parameters
     model.to(device)
@@ -234,11 +244,17 @@ def train_model(args, RE_train_dataset, RE_dev_dataset, fold_idx, dynamic_paddin
         os.makedirs(model_save_pth, exist_ok=True)
         model.save_pretrained(model_save_pth)
 
+        if args.add_unk_token :
+            tokenizer.save_pretrained(model_save_pth+'/tokenizer')
+    
     else:
         model_save_pth = os.path.join(args.save_dir, args.PLM.replace(
             '/', '-') + '-' + args.wandb_unique_tag.replace('/', '-'))
         os.makedirs(model_save_pth, exist_ok=True)
         model.save_pretrained(model_save_pth)
+        
+        if args.add_unk_token :
+            tokenizer.save_pretrained(model_save_pth+'/tokenizer')
 
 
 def main(args):
@@ -313,14 +329,19 @@ if __name__ == '__main__':
     # Running mode
     parser.add_argument('--entity_flag', default=False, action='store_true',
                         help='add Entity flag (default: False)')
-    parser.add_argument('--preprocessing_flag', default=False, action='store_true',
-                        help='input text pre-processing (default: False)')
+    # parser.add_argument('--preprocessing_flag', default=False, action='store_true',
+    #                     help='input text pre-processing (default: False)')
+    parser.add_argument('--preprocessing_cmb', nargs='+',
+                        help='<Required> Set flag (example: 0 1 2)')
+
     parser.add_argument('--mecab_flag', default=False, action='store_true',
                         help='input text pre-processing (default: False)')
-
-    parser.add_argument("--k_fold", type=int, default=0,
-                        help='not k fold(defalut: 0)')
-
+    
+    parser.add_argument('--add_unk_token', default=False, action='store_true',
+                    help='add unknown token in vocab (default: False)')
+    
+    parser.add_argument("--k_fold", type=int, default=0, help='not k fold(defalut: 0)')
+    
     args = parser.parse_args()
 
     # Start

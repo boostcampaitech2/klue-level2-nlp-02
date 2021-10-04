@@ -1,6 +1,7 @@
-from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments
+from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, BertTokenizer
 from torch.utils.data import DataLoader
 from load_data import *
+from Preprocessing.preprocessor import EntityPreprocessor, SenPreprocessor, UnkPreprocessor
 import pandas as pd
 import torch
 import torch.nn.functional as F
@@ -100,13 +101,12 @@ def num_to_label(label):
     return origin_label
 
 
-def load_test_dataset(dataset_dir, tokenizer, entity_flag, preprocessing_flag, mecab_flag):
+def load_test_dataset(dataset_dir, tokenizer, sen_preprocessor, entity_preprocessor):
     """
       test dataset을 불러온 후,
       tokenizing 합니다.
     """
-    test_dataset = load_data(dataset_dir, entity_flag,
-                             preprocessing_flag, mecab_flag)
+    test_dataset = load_data(dataset_dir, sen_preprocessor, entity_preprocessor)
     test_label = list(map(int, test_dataset['label'].values))
 
     # tokenizing dataset
@@ -136,28 +136,31 @@ def main(args):
       주어진 dataset csv 파일과 같은 형태일 경우 inference 가능한 코드입니다.
     """
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-#     # load tokenizer
-    Tokenizer_NAME = args.PLM
-    tokenizer = AutoTokenizer.from_pretrained(Tokenizer_NAME)
+    # load tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(args.PLM)
 
-#     # load my model
+    # load my model
     model_dir = select_checkpoint(args)
-#     model = AutoModelForSequenceClassification.from_pretrained(model_dir)
-#     model.parameters
-#     model.to(device)
 
     # load test datset
     test_dataset_dir = "/opt/ml/dataset/test/test_data.csv"
 
-    if Tokenizer_NAME in ['klue/roberta-base', 'klue/roberta-small', 'klue/roberta-large']:
+    # preprocessor
+    sen_preprocessor = SenPreprocessor(args.preprocessing_cmb, args.mecab_flag)
+    entity_preprocessor = EntityPreprocessor(args.entity_flag)
+
+    if args.PLM in ['klue/roberta-base', 'klue/roberta-small', 'klue/roberta-large']:
         is_roberta = True
+        if args.add_unk_token :
+            print(model_dir+'/tokenizer')
+            tokenizer = BertTokenizer.from_pretrained(model_dir+'/tokenizer')
+            print('new vocab size:', len(tokenizer.vocab)+len(tokenizer.get_added_vocab()))
     else:
         is_roberta = False
 
-    test_id, test_dataset, test_label = load_test_dataset(
-        test_dataset_dir, tokenizer, args.entity_flag, args.preprocessing_flag, args.mecab_flag)
+    test_id, test_dataset, test_label = load_test_dataset(test_dataset_dir, tokenizer, sen_preprocessor, entity_preprocessor)
     Re_test_dataset = RE_Dataset(test_dataset, test_label)
-    
+
     if args.k_fold:
         pred_answer, output_prob = inference_ensemble(model_dir, Re_test_dataset, device, is_roberta)  # model에서 class 추론
         pred_answer = np.mean(pred_answer,axis=0)
@@ -196,10 +199,14 @@ if __name__ == '__main__':
         '--PLM', type=str, help='model type (example: klue/bert-base)', required=True)
     parser.add_argument(
         '--entity_flag', default=False, action='store_true', help='Train에 사용했던거랑 똑같이 (default: False)')
+    # parser.add_argument(
+    #     '--preprocessing_flag', default=False, action='store_true', help='Train에 사용했던거랑 똑같이 (default: False)')
     parser.add_argument(
-        '--preprocessing_flag', default=False, action='store_true', help='Train에 사용했던거랑 똑같이 (default: False)')
+        '--preprocessing_cmb', nargs='+', help='<Required> Set flag (example: 0 1 2)')
     parser.add_argument(
         '--mecab_flag', default=False, action='store_true', help='Train에 사용했던거랑 똑같이 (default: False)')
+    parser.add_argument(
+        '--add_unk_token', default=False, action='store_true', help='add unknown token in vocab (default: False)')
     
     parser.add_argument("--k_fold", type=int, default=0, help='not k fold(defalut: 0)')
     

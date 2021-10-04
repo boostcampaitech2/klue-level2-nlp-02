@@ -7,7 +7,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split, StratifiedKFold
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
 from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer, DataCollatorWithPadding
-from load_data_r_robert import *
+from load_data import *
 from Preprocessing.preprocessor import EntityPreprocessor, SenPreprocessor, UnkPreprocessor, SingleEntityPreprocessor
 import argparse
 from pathlib import Path
@@ -136,7 +136,8 @@ def train(args):
                 list(train_dataset['subject_entity']),
                 list(train_dataset['object_entity']))
 
-        RE_train_dataset = RE_Dataset(tokenized_train, train_label, tokenizer, args.eval_ratio, entity_ids=True)
+        RE_train_dataset = r_RE_Dataset(tokenized_train, train_label, tokenizer, args.eval_ratio, entity_ids=True)
+        # RE_train_dataset = r_RE_Dataset(tokenizer)
         import pdb; pdb.set_trace()
 
         # train_model(args, RE_train_dataset, RE_dev_dataset=0, fold_idx=0, dynamic_padding=dynamic_padding,

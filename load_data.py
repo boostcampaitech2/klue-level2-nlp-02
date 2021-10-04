@@ -10,9 +10,7 @@ from torch.utils.data import Dataset, Subset
 
 class RE_Dataset(Dataset):
     """ Dataset 구성을 위한 class."""
-    def __init__(self, pair_dataset, labels,
-                 val_ratio=0.2, seed=2):
-        random.seed(seed)
+    def __init__(self, pair_dataset, labels, val_ratio=0.2):
         self.pair_dataset = pair_dataset
         self.labels = labels
         self.val_ratio = val_ratio
@@ -52,6 +50,45 @@ class RE_Dataset(Dataset):
         train_dset = Subset(self, train_data)
         val_dset = Subset(self, val_data)
         return train_dset, val_dset
+
+
+        
+
+class r_RE_Dataset(RE_Dataset) :
+    def __init__(self, pair_dataset, labels, tokenizer, val_ratio=0.2, entity_ids=False):
+        self.pair_dataset = pair_dataset
+        self.labels = labels
+        self.val_ratio = val_ratio
+        self.entity_ids = entity_ids
+
+        self.sub_id = tokenizer.get_vocab()['◈']
+        self.obj_id = tokenizer.get_vocab()['↑']
+
+    def __getitem__(self, idx):
+        item = {key: val[idx] for key, val in self.pair_dataset.items()}
+        item['labels'] = torch.tensor(self.labels[idx])
+
+        if self.entity_ids :
+            sub_flag, obj_flag = 0, 0
+            entity_ids = []
+            for enc in item['input_ids'] :
+                if enc == self.sub_id :
+                    sub_flag += 1
+                    entity_ids.append(0)
+                    continue
+                elif enc == self.obj_id :
+                    obj_flag += 1
+                    entity_ids.append(0)
+                    continue
+                if sub_flag == 1 : entity_ids.append(1)
+                elif obj_flag == 1 : entity_ids.append(1)
+                else : entity_ids.append(0)
+                item["entity_ids"] = torch.tensor(entity_ids)
+        return item
+    def __len__(self):
+       super().__len__
+    def split(self):
+        super().split()
 
 
 def preprocessing_dataset(dataset, sen_preprocessor, entity_preprocessor):

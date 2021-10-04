@@ -47,7 +47,7 @@ def inference(model, tokenized_sent, device, is_roberta=False):
     return np.concatenate(output_pred).tolist(), np.concatenate(output_prob, axis=0).tolist()
 
 
-def inference_ensemble(model_dir, tokenized_sent, device, is_roberta=False):
+def inference_ensemble(model_dir, tokenized_sent, device, model_name, is_roberta=False):
     dataloader = DataLoader(tokenized_sent, batch_size=16, shuffle=False)
 
     dirs = os.listdir(model_dir)
@@ -57,7 +57,16 @@ def inference_ensemble(model_dir, tokenized_sent, device, is_roberta=False):
     final_output_pred = []
     for i in range(len(dirs)):
         model_d = os.path.abspath(os.path.join(model_dir, dirs[i]))
-        model = AutoModelForSequenceClassification.from_pretrained(model_d)
+        # model = AutoModelForSequenceClassification.from_pretrained(model_d)
+        # model.parameters
+        # model.to(device)
+
+        model_config = AutoConfig.from_pretrained(model_name)
+        model_config.num_labels = 30
+        model_config.update({'output_hidden_states': True})
+        model = MyModel(args.PLM, config=model_config)
+        model.load_state_dict(torch.load(
+            os.path.join(model_d, 'pytorch_model.pt')))
         model.parameters
         model.to(device)
 
@@ -163,7 +172,7 @@ def main(args):
 
     if args.k_fold:
         pred_answer, output_prob = inference_ensemble(
-            model_dir, Re_test_dataset, device, is_roberta)  # model에서 class 추론
+            model_dir, Re_test_dataset, device, args.PLM, is_roberta)  # model에서 class 추론
         pred_answer = np.mean(pred_answer, axis=0)
         pred_answer = np.argmax(pred_answer, axis=-1)
         pred_answer = num_to_label(pred_answer)

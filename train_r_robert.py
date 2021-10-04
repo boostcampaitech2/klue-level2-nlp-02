@@ -7,8 +7,8 @@ import numpy as np
 from sklearn.model_selection import train_test_split, StratifiedKFold
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
 from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer, DataCollatorWithPadding
-from load_data import *
-from Preprocessing.preprocessor import EntityPreprocessor, SenPreprocessor, UnkPreprocessor
+from load_data_r_robert import *
+from Preprocessing.preprocessor import EntityPreprocessor, SenPreprocessor, UnkPreprocessor, SingleEntityPreprocessor
 import argparse
 from pathlib import Path
 import random
@@ -87,7 +87,7 @@ def train(args):
     # Preprocessor
     sen_preprocessor = SenPreprocessor(args.preprocessing_cmb, args.mecab_flag)
     unk_preprocessor = UnkPreprocessor(tokenizer)
-    entity_preprocessor = EntityPreprocessor(args.entity_flag)
+    entity_preprocessor = SingleEntityPreprocessor(args.entity_flag)
 
     # load dataset
     train_dataset = load_data("/opt/ml/dataset/train/train.csv", sen_preprocessor, entity_preprocessor)
@@ -108,8 +108,8 @@ def train(args):
             
             tokenized_train = tokenized_dataset(train_lists, tokenizer)  # UNK token count
             tokenized_valid = tokenized_dataset(valid_lists, tokenizer)  # UNK token count
-            RE_train_dataset = RE_Dataset(tokenized_train, train_labels, args.eval_ratio)
-            RE_dev_dataset = RE_Dataset(tokenized_valid, valid_labels, args.eval_ratio)
+            RE_train_dataset = RE_Dataset(tokenized_train, train_labels, tokenizer, args.eval_ratio, entity_ids=True)
+            RE_dev_dataset = RE_Dataset(tokenized_valid, valid_labels, tokenizer, args.eval_ratio, entity_ids=True)
             
             load_dotenv(dotenv_path=args.dotenv_path)
             WANDB_AUTH_KEY = os.getenv('WANDB_AUTH_KEY')
@@ -136,10 +136,11 @@ def train(args):
                 list(train_dataset['subject_entity']),
                 list(train_dataset['object_entity']))
 
-        RE_train_dataset = RE_Dataset(tokenized_train, train_label, args.eval_ratio)
-        
-        train_model(args, RE_train_dataset, RE_dev_dataset=0, fold_idx=0, dynamic_padding=dynamic_padding,
-                     tokenizer=tokenizer, added_token_num=added_token_num)
+        RE_train_dataset = RE_Dataset(tokenized_train, train_label, tokenizer, args.eval_ratio, entity_ids=True)
+        import pdb; pdb.set_trace()
+
+        # train_model(args, RE_train_dataset, RE_dev_dataset=0, fold_idx=0, dynamic_padding=dynamic_padding,
+        #              tokenizer=tokenizer, added_token_num=added_token_num)
         
     
 def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,tokenizer,added_token_num):

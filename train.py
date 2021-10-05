@@ -94,19 +94,19 @@ def train(args):
     datasets = load_data("/opt/ml/dataset/train/train.csv", args.k_fold, args.eval_ratio)
     
     for fold_idx, (train_dataset, test_dataset) in enumerate(datasets):
-        #augmnetation
         
+        #agumentation and preprocessing
         aug_data_by_mixing_entity = augmentation_by_resampling(train_dataset) if args.augmentation_flag is True else None
+        aug_data_by_mixing_entity = preprocessing_dataset(aug_data_by_mixing_entity, sen_preprocessor, entity_preprocessor)
+        train_dataset = preprocessing_dataset(train_dataset, sen_preprocessor, entity_preprocessor)
         aug_data_by_aeda = aeda_dataset(train_dataset) if args.aeda_flag is True else None
-        
+
         #concatenate augmentation data and train data
         train_dataset = pd.concat([train_dataset, aug_data_by_mixing_entity, aug_data_by_aeda])
 
         #shuffle rows
         train_dataset = train_dataset.sample(frac=1,random_state=args.seed).reset_index(drop=True)
 
-        #preprocessing data
-        train_dataset = preprocessing_dataset(train_dataset, sen_preprocessor, entity_preprocessor)
         train_label = label_to_num(train_dataset['label'].values)
         tokenized_train = tokenized_dataset(train_dataset, tokenizer)
         RE_train_dataset = RE_Dataset(tokenized_train, train_label)

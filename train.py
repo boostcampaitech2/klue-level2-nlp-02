@@ -114,7 +114,7 @@ def compute_metrics(pred):
 
 def label_to_num(label, model_type="per_sort"):
     num_label = []
-    with open('/opt/ml/bigsmall/dict_label_to_num.pkl', 'rb') as f:
+    with open('dict_label_to_num.pkl', 'rb') as f:
         dict_label_to_num = pickle.load(f)
     for v in label:
         
@@ -183,7 +183,7 @@ def train(args):
             
             wandb.init(
                 entity="klue-level2-nlp-02",
-                project="Relation-Extraction_1001",
+                project="Relation-Extraction",
                 name=args.wandb_unique_tag+"_"+str(fold_idx),
                 group=args.PLM+"-k_fold")
             
@@ -228,7 +228,7 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
     
     if args.eval_flag == True or args.k_fold:
         training_args = TrainingArguments(
-            output_dir='/opt/ml/bigsmall/results',          # output directory
+            output_dir='./results',          # output directory
             save_total_limit=5,              # number of total save model.
             save_steps=500,                  # model saving step.
             num_train_epochs=args.epochs,              # total number of training epochs
@@ -239,7 +239,7 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
             # number of warmup steps for learning rate scheduler
             warmup_steps=args.warmup_steps,
             weight_decay=args.weight_decay,                # strength of weight decay
-            logging_dir='/opt/ml/bigsmall/logs',            # directory for storing logs
+            logging_dir='./logs',            # directory for storing logs
             logging_steps=100,               # log saving step.
             # evaluation strategy to adopt during training
             evaluation_strategy=args.evaluation_strategy,
@@ -259,7 +259,7 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
                 train_dataset=RE_train_dataset,         # training dataset
                 eval_dataset=RE_dev_dataset,             # evaluation dataset
                 compute_metrics=compute_metrics,         # define metrics function
-                #data_collator=dynamic_padding,
+                data_collator=dynamic_padding,
                 tokenizer=tokenizer,
             )
         else:
@@ -270,13 +270,13 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
                 train_dataset=RE_train_dataset,         # training dataset
                 eval_dataset=RE_dev_dataset,             # evaluation dataset
                 compute_metrics=compute_metrics,         # define metrics function
-                #data_collator=dynamic_padding,
+                data_collator=dynamic_padding,
                 tokenizer=tokenizer,
             )
 
     else:
         training_args = TrainingArguments(
-            output_dir='/opt/ml/bigsmall/results',          # output directory
+            output_dir='./results',          # output directory
             save_total_limit=5,              # number of total save model.
             save_steps=500,                  # model saving step.
             num_train_epochs=args.epochs,              # total number of training epochs
@@ -287,7 +287,7 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
             # number of warmup steps for learning rate scheduler
             warmup_steps=args.warmup_steps,
             weight_decay=args.weight_decay,                # strength of weight decay
-            logging_dir='/opt/ml/bigsmall/logs',            # directory for storing logs
+            logging_dir='./logs',            # directory for storing logs
             logging_steps=100,               # log saving step.
             # evaluation strategy to adopt during training
             evaluation_strategy=args.evaluation_strategy,
@@ -381,7 +381,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     # Data and model checkpoints directories
-    parser.add_argument('--save_dir', default='/opt/ml/bigsmall/best_models',
+    parser.add_argument('--save_dir', default='./best_models',
                         help='model save at save_dir/PLM-wandb_unique_tag')
     parser.add_argument('--PLM', type=str, default='klue/bert-base',
                         help='model type (default: klue/bert-base)')
@@ -429,7 +429,6 @@ if __name__ == '__main__':
     parser.add_argument("--k_fold", type=int, default=0, help='not k fold(defalut: 0)')
     parser.add_argument("--criterion", type=str, default='default', help='criterion type: label_smoothing, focal_loss')
     
-    ## 추가 부분 ##
     ## 주의사항 ##
     ## model_type 사용 시, wandb_unique_tag는 use_prepro_entity_mecab_orgsort, use_prepro_entity_mecab_persort 등으로 끝부분 제외하고 통일시켜주시면 감사합니다!
     ## 이유는 같은 폴더 안에 넣기 위함입니다!

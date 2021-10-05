@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -27,11 +28,12 @@ class FocalLoss(nn.Module):
             weight=self.weight,
             reduction=self.reduction
         )
-    
 
+
+# 대분류 시(big_sort), smoothing 0.3 ~ 0.5 사이가 적당할 듯함
 
 class LabelSmoothingLoss(nn.Module):
-    def __init__(self, classes=30, smoothing=0.5, dim=-1):
+    def __init__(self, classes=11, smoothing=0.3, dim=-1):
         super(LabelSmoothingLoss, self).__init__()
         self.confidence = 1.0 - smoothing
         self.smoothing = smoothing
@@ -45,8 +47,8 @@ class LabelSmoothingLoss(nn.Module):
             true_dist.fill_(self.smoothing / (self.cls - 1))
             true_dist.scatter_(1, target.data.unsqueeze(1), self.confidence)
         return torch.mean(torch.sum(-true_dist * pred, dim=self.dim))
-    
-## F1Loss 작성중 ##
+
+# # F1Loss 작성중 ##
 
 ###################
 criterion = {'label_smoothing': LabelSmoothingLoss, 'focal_loss': FocalLoss}

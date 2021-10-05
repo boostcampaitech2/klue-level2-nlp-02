@@ -572,7 +572,6 @@ def main(args):
     Re_test_dataset = RE_Dataset(test_dataset, test_label)
     
     if args.model_type and args.k_fold==0:
-        # big sort -> per sort-> org sort 순서대로 진행(같은 폴더 안에 3개의 모델이 들어가 있어야 한다!)
         pred_answer, output_prob = inference_three_step(model_dir, Re_test_dataset, device, is_roberta)
         pred_answer = num_to_label(pred_answer)
     

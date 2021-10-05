@@ -7,7 +7,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split, StratifiedKFold
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
 from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer, DataCollatorWithPadding
-from load_data import *
+from load_data_origin import *
 
 import argparse
 from pathlib import Path
@@ -150,9 +150,10 @@ def train_model(args, RE_train_dataset, RE_dev_dataset, fold_idx, dynamic_paddin
     # setting model hyperparameter
     model_config = AutoConfig.from_pretrained(args.PLM)
     model_config.num_labels = 30
+    model_config.classifier_dropout = args.drop
     model_config.update({'output_hidden_states': True})
 
-    model = MyModelForFreeze(args.PLM, config=model_config)
+    model = MyModel(args.PLM, config=model_config)
     print(model.config)
     model.parameters    
 
@@ -327,6 +328,7 @@ if __name__ == '__main__':
 
     parser.add_argument("--k_fold", type=int, default=0,
                         help='not k fold(defalut: 0)')
+    parser.add_argument("--drop", type=float, default=0.2, help='drop_out(default : 0)')
 
     args = parser.parse_args()
 

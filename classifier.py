@@ -1,125 +1,104 @@
 import torch
 from torch import nn
-from transformers import RobertaForSequenceClassification
+from transformers import RobertaPreTrainedModel, RobertaModel
+import torch.nn.functional as F
 
-class R_roberta(nn.Module):
-    """
-    Bert Pretrained
-    """
-    def __init__(self, model, num_labels : int = 30,
-                dropout_ratio : float =0.1):
-        super(R_roberta,self).__init__()
-        self.SChead = RobertaForSequenceClassification.from_pretrained(model, num_labels = num_labels)
-        
-        self.hidden_state_cls = nn.Linear(768,768)
-        self.hidden_state_subject = nn.Linear(768, 768)
-        self.hidden_state_object = nn.Linear(768,768)
 
-        self.concat_classifier = nn.Linear(768 * 3,  num_labels)
-        self.tanh = nn.Tanh()
-        self.softmax = nn.Softmax(dim = 1)
-        self.my_dropout = nn.Dropout(dropout_ratio)
+class FocalLoss(nn.Module):
+    def __init__(self, weight=None,
+                 gamma=2., reduction='mean'):
+        nn.Module.__init__(self)
+        self.weight = weight
+        self.gamma = gamma
+        self.reduction = reduction
 
-        self.loss = nn.CrossEntropyLoss()
-        self.num_labels = num_labels
-
-    def forward(self,
-        input_ids=None,
-        attention_mask=None,
-        token_type_ids=None,
-        position_ids=None,
-        head_mask=None,
-        inputs_embeds=None,
-        labels=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=None,
-        ent_ids = None,
-        ):
-        outputs, last_hidden_states, pooled_output, ent_ids_result = self.SChead(
-          input_ids=input_ids,
-          attention_mask=attention_mask,
-          token_type_ids=token_type_ids,
-          position_ids=position_ids,
-          head_mask=head_mask,
-          inputs_embeds=inputs_embeds,
-          labels=labels,
-          output_attentions=output_attentions,
-          output_hidden_states=output_hidden_states,
-          return_dict=return_dict,
-          ent_ids = ent_ids, # 추가 작업
+    def forward(self, input_tensor, target_tensor):
+        log_prob = F.log_softmax(input_tensor, dim=-1)
+        prob = torch.exp(log_prob)
+        return F.nll_loss(
+            ((1 - prob) ** self.gamma) * log_prob,
+            target_tensor,
+            weight=self.weight,
+            reduction=self.reduction
         )
-        if ent_ids is not None:
-            batch_size = last_hidden_states.shape[0]
-            token_len = last_hidden_states.shape[1]
-            hidden_state_len = last_hidden_states.shape[2]
-
-            last_hidden_state_outputs =last_hidden_states
-            ent_ids_outputs = ent_ids_result
-            
-            entity1_output = []
-            entity2_output = []
-            for bs in range(batch_size):
-                cut_list = []
-                # 첫 처리
-                if ent_ids_outputs[bs][0] == 1:
-                    cut_list.append(0)
-
-                for tl in range(1,token_len):
-                    if ent_ids[bs][tl-1] == 1 and ent_ids[bs][tl] == 0:
-                        cut_list.append(tl)
-                    if ent_ids[bs][tl-1] == 0 and ent_ids[bs][tl] == 1:
-                        cut_list.append(tl)
-                
-                # 끝처리
-                if len(cut_list) == 3 or len(cut_list) == 1:
-                    cut_list.append(token_len)
-
-                assert len(cut_list) % 2 == 0
-
-                entity1_insert = torch.zeros(hidden_state_len).to(input_ids.device)
-                entity2_insert = torch.zeros(hidden_state_len).to(input_ids.device)
-
-                if len(cut_list) >= 4:
-                    len1 = (cut_list[1] - cut_list[0])
-                    len2 = (cut_list[3] - cut_list[2])
-
-                    for i in range(cut_list[0], cut_list[1]):
-                        entity1_insert += last_hidden_state_outputs[bs][i]
-                    entity1_insert /= len1
-
-                    for i in range(cut_list[2], cut_list[3]):
-                        entity2_insert += last_hidden_state_outputs[bs][i]
-                    entity2_insert /= len2
-                elif len(cut_list) >= 2:
-                    len1 = (cut_list[1] - cut_list[0])
-
-                    for i in range(cut_list[0], cut_list[1]):
-                        entity1_insert += last_hidden_state_outputs[bs][i]
-                    entity1_insert /= len1
-
-                entity1_insert = entity1_insert.cpu().detach()
-                entity2_insert = entity2_insert.cpu().detach()
-                entity1_output.append(entity1_insert.numpy())
-                entity2_output.append(entity2_insert.numpy())
 
 
-            entity1_output= torch.tensor(entity1_output).to(input_ids.device)
-            entity2_output = torch.tensor(entity2_output).to(input_ids.device)  
+class FCLayer(nn.Module):
+    def __init__(self, input_dim, output_dim, dropout_rate=0.1, use_activation=True):
+        super(FCLayer, self).__init__()
+        self.use_activation = use_activation
+        self.dropout = nn.Dropout(dropout_rate)
+        self.linear = nn.Linear(input_dim, output_dim)
+        self.tanh = nn.Tanh()
 
-            pooled_output = self.classifier_cls(pooled_output)
-            entity1_output = self.classifier_entity1(self.tanh(entity1_output))
-            entity2_output = self.classifier_entity2(self.tanh(entity2_output))
+    def forward(self, x):
+        x = self.dropout(x)
+        if self.use_activation:
+            x = self.tanh(x)
+        return self.linear(x)
 
-            logits = torch.cat([pooled_output,entity1_output,entity2_output],dim = 1)
-            logits = self.my_dropout(logits)
-            logits = self.concat_classifier(logits)
-            logits = self.softmax(logits)
+class R_roberta(RobertaPreTrainedModel):
+    def __init__(self, config, dropout_rate):
+        super().__init__(config)
+        self.robert = RobertaModel(config=config)  # Load pretrained bert
+        self.num_labels = config.num_labels
 
-            loss_fct = self.loss # 추가 부분
-            loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+        self.cls_fc_layer = FCLayer(config.hidden_size, config.hidden_size, dropout_rate)
+        self.entity_fc_layer = FCLayer(config.hidden_size, config.hidden_size, dropout_rate)
+        self.label_classifier = FCLayer(
+            config.hidden_size * 3,
+            config.num_labels,
+            dropout_rate,
+            use_activation=False,
+        )
+    @staticmethod
+    def entity_average(hidden_output, e_mask):
+        """
+        Average the entity hidden state vectors (H_i ~ H_j)
+        :param hidden_output: [batch_size, j-i+1, dim]
+        :param e_mask: [batch_size, max_seq_len]
+                e.g. e_mask[0] == [0, 0, 0, 1, 1, 1, 0, 0, ... 0]
+        :return: [batch_size, dim]
+        """
+        e_mask_unsqueeze = e_mask.unsqueeze(1)  # [b, 1, j-i+1]
+        length_tensor = (e_mask != 0).sum(dim=1).unsqueeze(1)  # [batch_size, 1]
 
-            outputs.loss = loss
-            outputs.logits = logits
+        # [b, 1, j-i+1] * [b, j-i+1, dim] = [b, 1, dim] -> [b, dim]
+        sum_vector = torch.bmm(e_mask_unsqueeze.float(), hidden_output).squeeze(1)
+        avg_vector = sum_vector.float() / length_tensor.float()  # broadcasting
+        return avg_vector
 
-        return outputs
+    def forward(self, input_ids, attention_mask, labels, e1_mask, e2_mask):
+        outputs = self.robert(
+            input_ids, attention_mask=attention_mask)  # sequence_output, pooled_output, (hidden_states), (attentions)
+        sequence_output = outputs[0]
+        pooled_output = outputs[1]  # [CLS]
+
+        # Average
+        e1_h = self.entity_average(sequence_output, e1_mask)
+        e2_h = self.entity_average(sequence_output, e2_mask)
+
+        # Dropout -> tanh -> fc_layer (Share FC layer for e1 and e2)
+        pooled_output = self.cls_fc_layer(pooled_output)
+        e1_h = self.entity_fc_layer(e1_h)
+        e2_h = self.entity_fc_layer(e2_h)
+
+        # Concat -> fc_layer
+        concat_h = torch.cat([pooled_output, e1_h, e2_h], dim=-1)
+        logits = self.label_classifier(concat_h)
+
+        outputs = (logits,) + outputs[2:]  # add hidden states and attention if they are here
+
+        # Softmax
+        if labels is not None:
+            if self.num_labels == 1:
+                loss_fct = nn.MSELoss()
+                loss = loss_fct(logits.view(-1), labels.view(-1))
+            else:
+                # loss_fct = nn.CrossEntropyLoss()
+                loss_fct = FocalLoss()
+                loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+
+            outputs = (loss,) + outputs
+
+        return outputs  # (loss), logits, (hidden_states), (attentions)

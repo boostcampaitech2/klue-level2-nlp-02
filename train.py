@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import pickle as pickle
 import os
 import pandas as pd
@@ -19,8 +20,19 @@ import random
 import wandb
 from dotenv import load_dotenv
 
+dictionary_big_sort = {'no_relation':0, "per":1, "org":2}
+dictionary_per_sort = {'per:title': 0, 'per:employee_of': 1,  'per:product': 2, 
+                       'per:children': 3, 'per:place_of_residence': 4, 
+                       'per:alternate_names': 5, 'per:other_family': 6, 'per:colleagues': 7, 
+                       'per:origin': 8, 'per:siblings': 9, 'per:spouse': 10, 
+                       'per:parents': 11,  'per:schools_attended': 12, 
+                       'per:date_of_death': 13, 'per:date_of_birth': 14, 'per:place_of_birth': 15, 
+                       'per:place_of_death': 16,  'per:religion': 17}
+dictionary_org_sort = {'org:top_members/employees': 0, 'org:members': 1, 'org:product': 2,
+                       'org:alternate_names': 3, 'org:place_of_headquarters': 4, 'org:number_of_employees/members': 5, 'org:founded': 6,
+                       'org:political/religious_affiliation': 7, 'org:member_of': 8, 'org:dissolved': 9, 'org:founded_by': 10}
 
-def klue_re_micro_f1(preds, labels):
+def klue_re_micro_f1(preds, labels, model_type):
     """KLUE-RE micro f1 (except no_relation)"""
     label_list = ['no_relation', 'org:top_members/employees', 'org:members',
                   'org:product', 'per:title', 'org:alternate_names',
@@ -33,18 +45,46 @@ def klue_re_micro_f1(preds, labels):
                   'per:schools_attended', 'per:date_of_death', 'per:date_of_birth',
                   'per:place_of_birth', 'per:place_of_death', 'org:founded_by',
                   'per:religion']
-    no_relation_label_idx = label_list.index("no_relation")
-    label_indices = list(range(len(label_list)))
-    label_indices.remove(no_relation_label_idx)
+    
+    if model_type=="big_sort":
+        label_list=list(dictionary_big_sort.keys())
+        no_relation_label_idx = label_list.index("no_relation")
+        label_indices = list(range(len(label_list)))
+        label_indices.remove(no_relation_label_idx)
+        
+    elif model_type=="per_sort":
+        label_list=list(dictionary_per_sort.keys())
+        label_indices = list(range(len(label_list)))
+        
+    elif model_type=="org_sort":
+        label_list=list(dictionary_org_sort.keys())
+        label_indices = list(range(len(label_list)))
+        
+    else:
+        no_relation_label_idx = label_list.index("no_relation")
+        label_indices = list(range(len(label_list)))
+        label_indices.remove(no_relation_label_idx)
+        
+    # no_relation_label_idx = label_list.index("no_relation")
+    # label_indices = list(range(len(label_list)))
+    # label_indices.remove(no_relation_label_idx)
     return sklearn.metrics.f1_score(labels, preds, average="micro", labels=label_indices) * 100.0
 
 
-def klue_re_auprc(probs, labels):
+def klue_re_auprc(probs, labels, model_type):
     """KLUE-RE AUPRC (with no_relation)"""
-    labels = np.eye(30)[labels]
+    k=30
+    if model_type=="big_sort":
+        k=3
+    elif model_type=="per_sort":
+        k=18
+    elif model_type=="org_sort":
+        k=11
+    
+    labels = np.eye(k)[labels]
 
-    score = np.zeros((30,))
-    for c in range(30):
+    score = np.zeros((k,))
+    for c in range(k):
         targets_c = labels.take([c], axis=1).ravel()
         preds_c = probs.take([c], axis=1).ravel()
         precision, recall, _ = sklearn.metrics.precision_recall_curve(
@@ -57,11 +97,12 @@ def compute_metrics(pred):
     """ validation을 위한 metrics function """
     labels = pred.label_ids
     preds = pred.predictions.argmax(-1)
+    print(len(set(preds)))
     probs = pred.predictions
 
     # calculate accuracy using sklearn's function
-    f1 = klue_re_micro_f1(preds, labels)
-    auprc = klue_re_auprc(probs, labels)
+    f1 = klue_re_micro_f1(preds, labels, args.model_type)
+    auprc = klue_re_auprc(probs, labels, args.model_type)
     acc = accuracy_score(labels, preds)  # 리더보드 평가에는 포함되지 않습니다.
 
     return {
@@ -71,18 +112,35 @@ def compute_metrics(pred):
     }
 
 
-def label_to_num(label):
+def label_to_num(label, model_type="per_sort"):
     num_label = []
-    with open('dict_label_to_num.pkl', 'rb') as f:
+    with open('/opt/ml/bigsmall/dict_label_to_num.pkl', 'rb') as f:
         dict_label_to_num = pickle.load(f)
     for v in label:
-        num_label.append(dict_label_to_num[v])
+        
+        if model_type=="default":
+            num_label.append(dict_label_to_num[v])
+        
+        elif model_type=="big_sort": # no_relation: 0, per: 1, org: 2
+            if "per" in v:
+                v="per"
+            if "org" in v:
+                v="org"
+            num_label.append(dictionary_big_sort[v])
+        
+        elif model_type=="per_sort":
+            num_label.append(dictionary_per_sort[v])
+            
+        elif model_type=="org_sort":
+            num_label.append(dictionary_org_sort[v])
 
     return num_label
+
+
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
-    
+
 #https://huggingface.co/transformers/main_classes/trainer.html
 class MultilabelTrainer(Trainer):
     def compute_loss(self, model, inputs, return_outputs=False):
@@ -102,10 +160,10 @@ def train(args):
     # dynamic padding
     dynamic_padding = DataCollatorWithPadding(tokenizer=tokenizer)
 
-    # load dataset
     train_dataset = load_data("/opt/ml/dataset/train/train.csv",
-                              args.entity_flag, args.preprocessing_flag, args.mecab_flag)
-    train_label = label_to_num(train_dataset['label'].values)
+                              args.entity_flag, args.preprocessing_flag, args.mecab_flag, args.model_type)
+    
+    train_label = label_to_num(train_dataset['label'].values, args.model_type)
     
     if args.k_fold:
         skf = StratifiedKFold(n_splits=args.k_fold, shuffle=True)
@@ -130,7 +188,7 @@ def train(args):
                 group=args.PLM+"-k_fold")
             
             wandb.config.update(args)
-            train_model(args=args,RE_train_dataset=RE_train_dataset, RE_dev_dataset=RE_dev_dataset, fold_idx=fold_idx, dynamic_padding=dynamic_padding, tokenizer=tokenizer)
+            train_model(args=args,RE_train_dataset=RE_train_dataset, RE_dev_dataset=RE_dev_dataset, fold_idx=fold_idx, dynamic_padding=dynamic_padding, tokenizer=tokenizer, model_type=args.model_type)
             wandb.finish()
             
     else:
@@ -139,10 +197,10 @@ def train(args):
         
         RE_train_dataset = RE_Dataset(tokenized_train, train_label, args.eval_ratio, args.seed)
         
-        train_model(args, RE_train_dataset, RE_dev_dataset=0, fold_idx=0, dynamic_padding=dynamic_padding, tokenizer=tokenizer)
-        
+        train_model(args, RE_train_dataset, RE_dev_dataset=0, fold_idx=0, dynamic_padding=dynamic_padding, tokenizer=tokenizer, model_type=args.model_type)
 
-def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,tokenizer):
+
+def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,tokenizer,model_type):
     
     # Split validation dataset
     if args.eval_flag == True and args.k_fold==0:
@@ -153,7 +211,14 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
     print(device)
     # setting model hyperparameter
     model_config = AutoConfig.from_pretrained(args.PLM)
-    model_config.num_labels = 30
+    if model_type=="big_sort":
+        model_config.num_labels=3
+    elif model_type=="per_sort":
+        model_config.num_labels=18
+    elif model_type=="org_sort":
+        model_config.num_labels=11
+    else:
+        model_config.num_labels = 30
 
     model = AutoModelForSequenceClassification.from_pretrained(
         args.PLM, ignore_mismatched_sizes=args.ignore_mismatched, config=model_config)
@@ -163,7 +228,7 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
     
     if args.eval_flag == True or args.k_fold:
         training_args = TrainingArguments(
-            output_dir='./results',          # output directory
+            output_dir='/opt/ml/bigsmall/results',          # output directory
             save_total_limit=5,              # number of total save model.
             save_steps=500,                  # model saving step.
             num_train_epochs=args.epochs,              # total number of training epochs
@@ -174,7 +239,7 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
             # number of warmup steps for learning rate scheduler
             warmup_steps=args.warmup_steps,
             weight_decay=args.weight_decay,                # strength of weight decay
-            logging_dir='./logs',            # directory for storing logs
+            logging_dir='/opt/ml/bigsmall/logs',            # directory for storing logs
             logging_steps=100,               # log saving step.
             # evaluation strategy to adopt during training
             evaluation_strategy=args.evaluation_strategy,
@@ -211,7 +276,7 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
 
     else:
         training_args = TrainingArguments(
-            output_dir='./results',          # output directory
+            output_dir='/opt/ml/bigsmall/results',          # output directory
             save_total_limit=5,              # number of total save model.
             save_steps=500,                  # model saving step.
             num_train_epochs=args.epochs,              # total number of training epochs
@@ -222,7 +287,7 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
             # number of warmup steps for learning rate scheduler
             warmup_steps=args.warmup_steps,
             weight_decay=args.weight_decay,                # strength of weight decay
-            logging_dir='./logs',            # directory for storing logs
+            logging_dir='/opt/ml/bigsmall/logs',            # directory for storing logs
             logging_steps=100,               # log saving step.
             # evaluation strategy to adopt during training
             evaluation_strategy=args.evaluation_strategy,
@@ -262,14 +327,23 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
     trainer.train()
     
     if args.k_fold:
-        model_save_pth = os.path.join(args.save_dir, args.PLM.replace(
-        '/', '-') + '-' + args.wandb_unique_tag.replace('/', '-') + "/" + str(fold_idx))
+        if model_type!="default":
+            folder_name = re.sub("orgsort|persort|bigsort","",args.wandb_unique_tag)
+            model_save_pth = os.path.join(args.save_dir, args.PLM.replace('/', '-') + '-' + folder_name.replace('/', '-') + "/" + model_type + "_" + str(fold_idx))
+        else:
+            model_save_pth = os.path.join(args.save_dir, args.PLM.replace('/', '-') + '-' + args.wandb_unique_tag.replace('/', '-') + "/" + str(fold_idx))
         os.makedirs(model_save_pth, exist_ok=True)
         model.save_pretrained(model_save_pth)
     
+    elif model_type!="default":
+        folder_name = re.sub("orgsort|persort|bigsort","",args.wandb_unique_tag)
+        model_save_pth = os.path.join(args.save_dir, args.PLM.replace('/', '-') + '-' + folder_name.replace('/', '-') + "/" + model_type)
+        os.makedirs(model_save_pth, exist_ok=True)
+        model.save_pretrained(model_save_pth)
+        
+        
     else:
-        model_save_pth = os.path.join(args.save_dir, args.PLM.replace(
-        '/', '-') + '-' + args.wandb_unique_tag.replace('/', '-'))
+        model_save_pth = os.path.join(args.save_dir, args.PLM.replace('/', '-') + '-' + args.wandb_unique_tag.replace('/', '-'))
         os.makedirs(model_save_pth, exist_ok=True)
         model.save_pretrained(model_save_pth)
 
@@ -307,7 +381,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     # Data and model checkpoints directories
-    parser.add_argument('--save_dir', default='./best_models',
+    parser.add_argument('--save_dir', default='/opt/ml/bigsmall/best_models',
                         help='model save at save_dir/PLM-wandb_unique_tag')
     parser.add_argument('--PLM', type=str, default='klue/bert-base',
                         help='model type (default: klue/bert-base)')
@@ -327,7 +401,7 @@ if __name__ == '__main__':
                         help='ignore mismatched size when load pretrained model')
 
     # Validation
-    parser.add_argument('--eval_flag', default=False, action='store_true',
+    parser.add_argument('--eval_flag', default=True, action='store_true',
                         help='eval flag (default: True)')
     parser.add_argument('--eval_ratio', type=float, default=0.2,
                         help='eval data size ratio (default: 0.2)')
@@ -354,6 +428,12 @@ if __name__ == '__main__':
     
     parser.add_argument("--k_fold", type=int, default=0, help='not k fold(defalut: 0)')
     parser.add_argument("--criterion", type=str, default='default', help='criterion type: label_smoothing, focal_loss')
+    
+    ## 추가 부분 ##
+    ## 주의사항 ##
+    ## model_type 사용 시, wandb_unique_tag는 use_prepro_entity_mecab_orgsort, use_prepro_entity_mecab_persort 등으로 끝부분 제외하고 통일시켜주시면 감사합니다!
+    ## 이유는 같은 폴더 안에 넣기 위함입니다!
+    parser.add_argument("--model_type", type=str, default='default', help='criterion type: big_sort, per_sort, org_sort')
     
     args = parser.parse_args()
 

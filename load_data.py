@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import pickle as pickle
 import os
 import re
@@ -114,7 +115,7 @@ def preprocessing_dataset(dataset, entity_flag=0, preprocessing_flag=0, mecab_fl
     return out_dataset
 
 
-def load_data(dataset_dir, entity_flag=0, preprocessing_flag=0, mecab_flag=0):
+def load_data(dataset_dir, entity_flag=0, preprocessing_flag=0, mecab_flag=0, model_type="big_sort"):
     """ csv 파일을 경로에 맡게 불러 옵니다. """
     pd_dataset = pd.read_csv(dataset_dir)
     if 'train' in dataset_dir:
@@ -125,6 +126,12 @@ def load_data(dataset_dir, entity_flag=0, preprocessing_flag=0, mecab_flag=0):
         pd_dataset = pd_dataset.drop(index=[6749, 8364, 22258, 277, 25094])
         pd_dataset = pd_dataset.reset_index(drop=True)
         print("Finish remove duplicated data")
+    
+    if model_type=="per_sort":
+        pd_dataset=pd_dataset[pd_dataset['label'].str.contains('per')].reset_index(drop=True)
+    elif model_type=="org_sort":
+        pd_dataset=pd_dataset[pd_dataset['label'].str.contains('org')].reset_index(drop=True)
+        
 
     dataset = preprocessing_dataset(
         pd_dataset, entity_flag, preprocessing_flag, mecab_flag)
@@ -133,11 +140,31 @@ def load_data(dataset_dir, entity_flag=0, preprocessing_flag=0, mecab_flag=0):
 
 def tokenized_dataset(dataset, tokenizer, is_inference=False):
     """ tokenizer에 따라 sentence를 tokenizing 합니다."""
+#     sentences = []
+#     questions = []
+#     for sen, e01, e02 in zip(dataset['sentence'], dataset['subject_entity'], dataset['object_entity']):
+#         sentences.append(sen)
+          
+#         아래의 question 둘 중 하나 선택    
+#         questions.append('◈ ' + e01 + '◈ 과 ↑ ' + e02 + ' ↑ 는 무슨 관계일까요?')
+#         questions.append('</e1> ' + e01 + '</e1> 과 </e2> ' + e02 + ' </e2> 는 무슨 관계일까요?')    
+#     tokenized_sentences = tokenizer(
+#         sentences,
+#         questions,
+#         return_tensors="pt",
+#         padding=True,
+#         truncation=True,
+#         max_length=256,
+#         add_special_tokens=True,
+#         return_token_type_ids=False
+#     )
     concat_entity = []
-    for e01, e02 in zip(dataset['subject_entity'], dataset['object_entity']):
+    for sen ,e01, e02 in zip(dataset['sentence'], dataset['subject_entity'], dataset['object_entity']):
         temp = ''
         temp = e01 + '[SEP]' + e02
         concat_entity.append(temp)
+
+       
 
     if is_inference:
         """ Roberta TTI_flag """

@@ -11,6 +11,7 @@ import numpy as np
 import argparse
 import os
 from tqdm import tqdm
+from tokenization import tokenized_dataset
 
 
 def inference(model, tokenized_sent, device, is_roberta=False):
@@ -207,6 +208,8 @@ if __name__ == '__main__':
         '--mecab_flag', default=False, action='store_true', help='Train에 사용했던거랑 똑같이 (default: False)')
     parser.add_argument(
         '--add_unk_token', default=False, action='store_true', help='add unknown token in vocab (default: False)')
+    parser.add_argument(
+        '--r_roberta', default=False, action='store_true', help=' custom model to r_roberta(default: False)')
     
     parser.add_argument("--k_fold", type=int, default=0, help='not k fold(defalut: 0)')
     

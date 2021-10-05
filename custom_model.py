@@ -3,26 +3,6 @@ from torch import nn
 from transformers import RobertaPreTrainedModel, RobertaModel, AutoModel
 import torch.nn.functional as F
 
-
-class FocalLoss(nn.Module):
-    def __init__(self, weight=None,
-                 gamma=2., reduction='mean'):
-        nn.Module.__init__(self)
-        self.weight = weight
-        self.gamma = gamma
-        self.reduction = reduction
-
-    def forward(self, input_tensor, target_tensor):
-        log_prob = F.log_softmax(input_tensor, dim=-1)
-        prob = torch.exp(log_prob)
-        return F.nll_loss(
-            ((1 - prob) ** self.gamma) * log_prob,
-            target_tensor,
-            weight=self.weight,
-            reduction=self.reduction
-        )
-
-
 class FCLayer(nn.Module):
     def __init__(self, input_dim, output_dim, dropout_rate=0.1, use_activation=True):
         super(FCLayer, self).__init__()
@@ -37,12 +17,11 @@ class FCLayer(nn.Module):
             x = self.tanh(x)
         return self.linear(x)
 
-class MyModel(RobertaPreTrainedModel):
-    def __init__(self, model_name, config, dropout_rate):
+class r_roberta(RobertaPreTrainedModel):
+    def __init__(self, model, config, dropout_rate):
         super().__init__(config)
-
-        # self.robert = RobertaModel(config=config)  # Load pretrained bert
-        self.robert = AutoModel.from_pretrained(model_name, config=config)
+        
+        self.robert = model
         self.num_labels = config.num_labels
 
         self.cls_fc_layer = FCLayer(config.hidden_size, config.hidden_size, dropout_rate)
@@ -99,7 +78,6 @@ class MyModel(RobertaPreTrainedModel):
                 loss = loss_fct(logits.view(-1), labels.view(-1))
             else:
                 loss_fct = nn.CrossEntropyLoss()
-                # loss_fct = FocalLoss()
                 loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
 
             outputs = (loss,) + outputs

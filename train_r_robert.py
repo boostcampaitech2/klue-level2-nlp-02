@@ -8,14 +8,13 @@ from sklearn.model_selection import train_test_split, StratifiedKFold
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
 from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer, DataCollatorWithPadding
 from load_data import *
-import classifier
 from Preprocessing.preprocessor import EntityPreprocessor, SenPreprocessor, UnkPreprocessor, SingleEntityPreprocessor
 import argparse
 from pathlib import Path
 import random
 import wandb
 from dotenv import load_dotenv
-from classifier import *
+from custom_model import *
 
 
 def klue_re_micro_f1(preds, labels):
@@ -312,6 +311,8 @@ if __name__ == '__main__':
                         help='number of epochs to train (default: 3)')
     parser.add_argument('--lr', type=float, default=5e-5,
                         help='learning rate (default: 5e-5)')
+    parser.add_argument('--dropout_rate', type=float, default=0.1,
+                        help='dropout_rate (default: 0.1)')
     parser.add_argument('--train_batch_size', type=int,
                         default=16, help='train batch size (default: 16)')
     parser.add_argument('--warmup_steps', type=int, default=500,

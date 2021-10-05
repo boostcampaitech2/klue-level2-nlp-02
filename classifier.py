@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from transformers import RobertaPreTrainedModel, RobertaModel
+from transformers import RobertaPreTrainedModel, RobertaModel, AutoModel
 import torch.nn.functional as F
 
 
@@ -37,10 +37,12 @@ class FCLayer(nn.Module):
             x = self.tanh(x)
         return self.linear(x)
 
-class R_roberta(RobertaPreTrainedModel):
-    def __init__(self, config, dropout_rate):
+class MyModel(RobertaPreTrainedModel):
+    def __init__(self, model_name, config, dropout_rate):
         super().__init__(config)
-        self.robert = RobertaModel(config=config)  # Load pretrained bert
+
+        # self.robert = RobertaModel(config=config)  # Load pretrained bert
+        self.robert = AutoModel.from_pretrained(model_name, config=config)
         self.num_labels = config.num_labels
 
         self.cls_fc_layer = FCLayer(config.hidden_size, config.hidden_size, dropout_rate)
@@ -48,9 +50,10 @@ class R_roberta(RobertaPreTrainedModel):
         self.label_classifier = FCLayer(
             config.hidden_size * 3,
             config.num_labels,
-            dropout_rate,
+            dropout_rate=0,
             use_activation=False,
         )
+
     @staticmethod
     def entity_average(hidden_output, e_mask):
         """
@@ -68,7 +71,7 @@ class R_roberta(RobertaPreTrainedModel):
         avg_vector = sum_vector.float() / length_tensor.float()  # broadcasting
         return avg_vector
 
-    def forward(self, input_ids, attention_mask, labels, e1_mask, e2_mask):
+    def forward(self, input_ids, attention_mask, e1_mask, e2_mask, labels=None):
         outputs = self.robert(
             input_ids, attention_mask=attention_mask)  # sequence_output, pooled_output, (hidden_states), (attentions)
         sequence_output = outputs[0]
@@ -95,8 +98,8 @@ class R_roberta(RobertaPreTrainedModel):
                 loss_fct = nn.MSELoss()
                 loss = loss_fct(logits.view(-1), labels.view(-1))
             else:
-                # loss_fct = nn.CrossEntropyLoss()
-                loss_fct = FocalLoss()
+                loss_fct = nn.CrossEntropyLoss()
+                # loss_fct = FocalLoss()
                 loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
 
             outputs = (loss,) + outputs

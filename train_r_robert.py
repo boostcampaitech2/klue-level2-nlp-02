@@ -15,6 +15,7 @@ from pathlib import Path
 import random
 import wandb
 from dotenv import load_dotenv
+from classifier import *
 
 
 def klue_re_micro_f1(preds, labels):
@@ -88,7 +89,9 @@ def train(args):
     # Preprocessor
     sen_preprocessor = SenPreprocessor(args.preprocessing_cmb, args.mecab_flag)
     unk_preprocessor = UnkPreprocessor(tokenizer)
-    entity_preprocessor = SingleEntityPreprocessor(args.entity_flag) ## r_robert
+    entity_preprocessor = EntityPreprocessor(args.entity_flag) 
+    # entity_preprocessor = SingleEntityPreprocessor(args.entity_flag) ## r_robert
+
 
     # load dataset
     train_dataset = load_data("/opt/ml/dataset/train/train.csv", sen_preprocessor, entity_preprocessor)
@@ -109,8 +112,10 @@ def train(args):
             
             tokenized_train = tokenized_dataset(train_lists, tokenizer)  # UNK token count
             tokenized_valid = tokenized_dataset(valid_lists, tokenizer)  # UNK token count
-            RE_train_dataset = RE_Dataset(tokenized_train, train_labels, args.eval_ratio)
-            RE_dev_dataset = RE_Dataset(tokenized_valid, valid_labels, args.eval_ratio)
+            # RE_train_dataset = RE_Dataset(tokenized_train, train_labels, args.eval_ratio)
+            # RE_dev_dataset = RE_Dataset(tokenized_valid, valid_labels, args.eval_ratio)
+            RE_train_dataset = r_RE_Dataset(tokenized_train, train_labels, tokenizer, args.eval_ratio, entity_ids=True) ## r_robert
+            RE_dev_dataset = r_RE_Dataset(tokenized_valid, valid_labels, tokenizer, args.eval_ratio, entity_ids=True) ## r_robert
             
             load_dotenv(dotenv_path=args.dotenv_path)
             WANDB_AUTH_KEY = os.getenv('WANDB_AUTH_KEY')
@@ -159,13 +164,13 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
 
     # model = AutoModelForSequenceClassification.from_pretrained(
     #     args.PLM, ignore_mismatched_sizes=args.ignore_mismatched, config=model_config)
-    model = classifier.R_roberta(model_config, dropout_rate=0.1) ## r_robert
+    model = MyModel(args.PLM, model_config, dropout_rate=0.1) ## r_robert
 
     
     if args.add_unk_token :
         model.resize_token_embeddings(tokenizer.vocab_size + added_token_num)
 
-    # print(model.config)
+    print(model.config)
     model.parameters
     model.to(device)
 
@@ -246,7 +251,9 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
         model_save_pth = os.path.join(args.save_dir, args.PLM.replace(
         '/', '-') + '-' + args.wandb_unique_tag.replace('/', '-') + "/" + str(fold_idx))
         os.makedirs(model_save_pth, exist_ok=True)
-        model.save_pretrained(model_save_pth)
+        # model.save_pretrained(model_save_pth)
+        torch.save(model.state_dict(), os.path.join(
+            model_save_pth, 'pytorch_model.pt'))
 
         if args.add_unk_token :
             tokenizer.save_pretrained(model_save_pth+'/tokenizer')
@@ -255,9 +262,9 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
         model_save_pth = os.path.join(args.save_dir, args.PLM.replace(
         '/', '-') + '-' + args.wandb_unique_tag.replace('/', '-'))
         os.makedirs(model_save_pth, exist_ok=True)
-        model.save_pretrained(model_save_pth)
-        model_save_pth_rrobert = os.path.join(model_save_pth,'r_robert.pt')
-        torch.save(model.state_dict(), model_save_pth_rrobert) ## r_robert
+        # model.save_pretrained(model_save_pth)
+        torch.save(model.state_dict(), os.path.join(
+            model_save_pth, 'pytorch_model.pt'))
 
         
         if args.add_unk_token :

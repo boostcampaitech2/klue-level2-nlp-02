@@ -23,7 +23,7 @@ def inference(model, tokenized_sent, device, is_roberta=False):
     model.eval()
     output_pred = []
     output_prob = []
-    for i, data in enumerate(tqdm(dataloader)):
+    for data in tqdm(dataloader):
         with torch.no_grad():
             if is_roberta:
                 outputs = model(
@@ -107,7 +107,8 @@ def load_test_dataset(dataset_dir, tokenizer, sen_preprocessor, entity_preproces
       test dataset을 불러온 후,
       tokenizing 합니다.
     """
-    test_dataset = load_data(dataset_dir, sen_preprocessor, entity_preprocessor)
+    test_dataset = load_data(dataset_dir, train=False)
+    test_dataset = preprocessing_dataset(test_dataset, sen_preprocessor, entity_preprocessor)
     test_label = list(map(int, test_dataset['label'].values))
 
     # tokenizing dataset
@@ -177,7 +178,7 @@ def main(args):
             model = ConcatFourClsModel(args.PLM, config=model_config)
 
         elif args.model_name == 'AddFourClassifierRoberta':
-            model = ConcatFourClsModel(args.PLM, config=model_config)
+            model = AddFourClassifierRoberta(args.PLM, config=model_config)
         
         model.load_state_dict(torch.load(os.path.join(model_dir, 'pytorch_model.pt')))
 

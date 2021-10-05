@@ -157,8 +157,8 @@ def inference_three_step(model_dir, tokenized_sent, device, is_roberta=False):
             k=big_prob_concatenate[idx][0]
             idx_prob.append(k)
             ## 제출 후 작성한 코드 ## -> 좀 더 prob를 정교하게 주기 위해서!
-            perprob=(big_prob_concatenate[c][1])/18
-            orgprob=(big_prob_concatenate[c][2])/11
+            perprob=(big_prob_concatenate[idx][1])/18
+            orgprob=(big_prob_concatenate[idx][2])/11
             for c in range(1,30):
                 if c in pers_id_index.values():
                     idx_prob.append(perprob)
@@ -166,8 +166,7 @@ def inference_three_step(model_dir, tokenized_sent, device, is_roberta=False):
                     idx_prob.append(orgprob)
             final_output_prob[idx]=idx_prob
             ##############################################################
-            
-            
+        
         elif big_pred_concatenate[idx]==1:
             per_index.append(idx)
         
@@ -287,7 +286,7 @@ def inference_three_step_ensemble(model_dir, Re_test_dataset, device, is_roberta
     pers_id_index = {0:4,1:6,2:8,3:10,4:11,5:12,6:13,7:14,8:15,9:16,10:17,11:21,12:23,13:24,14:25,15:26,16:27,17:29}
     orgs_id_index = {0:1,1:2,2:3,3:5,4:7,5:9,6:18,7:19,8:20,9:22,10:28}
     
-    dataloader = DataLoader(tokenized_sent, batch_size=16, shuffle=False)
+    dataloader = DataLoader(Re_test_dataset, batch_size=16, shuffle=False)
     
     dirs = os.listdir(model_dir)
     dirs = sorted(dirs)
@@ -309,7 +308,7 @@ def inference_three_step_ensemble(model_dir, Re_test_dataset, device, is_roberta
         
         # big sort 관련 모델을 불러옵니다! (대분류 시에 모델 이름이 big이라는 단어가 들어가야 수행 가능!)
         if "big" in bigmodel:
-            
+            print(bigmodel)
             model_d = os.path.abspath(os.path.join(model_dir, bigmodel))
             model = AutoModelForSequenceClassification.from_pretrained(model_d)
             model.parameters
@@ -344,8 +343,9 @@ def inference_three_step_ensemble(model_dir, Re_test_dataset, device, is_roberta
     
     fold_big_pred = np.mean(fold_big_pred,axis=0)
     fold_big_pred = np.argmax(fold_big_pred,axis=-1)
+    print(len(fold_big_pred))
     fold_big_prob = np.mean(fold_big_prob,axis=0).tolist()
-    
+    print(len(fold_big_prob))
     per_index=[]
     org_index=[]
     ## no_relation, per, org 분류 저장
@@ -356,8 +356,8 @@ def inference_three_step_ensemble(model_dir, Re_test_dataset, device, is_roberta
             k=fold_big_prob[idx][0]
             idx_prob.append(k)
             ## 제출 후 작성한 코드 ## -> 좀 더 prob를 정교하게 주기 위해서!
-            perprob=(fold_big_prob[c][1])/18
-            orgprob=(fold_big_prob[c][2])/11
+            perprob=(fold_big_prob[idx][1])/18
+            orgprob=(fold_big_prob[idx][2])/11
             for c in range(1,30):
                 if c in pers_id_index.values():
                     idx_prob.append(perprob)
@@ -367,10 +367,10 @@ def inference_three_step_ensemble(model_dir, Re_test_dataset, device, is_roberta
             ##############################################################
             
             
-        elif big_pred_concatenate[idx]==1:
+        if fold_big_pred[idx]==1:
             per_index.append(idx)
         
-        else:
+        if fold_big_pred[idx]==2:
             org_index.append(idx)
     
     print("Finish big sort")
@@ -382,6 +382,7 @@ def inference_three_step_ensemble(model_dir, Re_test_dataset, device, is_roberta
     fold_per_pred=[]
     for permodel in dirs:
         if "per" in permodel:
+            print(permodel)
             model_d = os.path.abspath(os.path.join(model_dir, permodel))
             model = AutoModelForSequenceClassification.from_pretrained(model_d)
             model.parameters
@@ -416,8 +417,9 @@ def inference_three_step_ensemble(model_dir, Re_test_dataset, device, is_roberta
     
     fold_per_pred = np.mean(fold_per_pred,axis=0)
     fold_per_pred = np.argmax(fold_per_pred,axis=-1)
+    print(len(fold_per_pred))
     fold_per_prob = np.mean(fold_per_prob,axis=0).tolist()
-            
+    print(per_index[0:10])
     for iz in range(7765):
         if iz in per_index:
             idx_prob=[0]*30
@@ -438,6 +440,7 @@ def inference_three_step_ensemble(model_dir, Re_test_dataset, device, is_roberta
     fold_org_pred=[]
     for orgmodel in dirs:
         if "org" in orgmodel:
+            print(orgmodel)
             model_d = os.path.abspath(os.path.join(model_dir, orgmodel))
             model = AutoModelForSequenceClassification.from_pretrained(model_d)
             model.parameters
@@ -468,14 +471,15 @@ def inference_three_step_ensemble(model_dir, Re_test_dataset, device, is_roberta
                 org_pred.extend(logits.tolist())
                 org_prob.append(prob)
             
-            fold_org_pred.append(per_pred)
-            fold_org_prob.append(np.concatenate(per_prob, axis=0).tolist())
+            fold_org_pred.append(org_pred)
+            fold_org_prob.append(np.concatenate(org_prob, axis=0).tolist())
     
     fold_org_pred = np.mean(fold_org_pred,axis=0)
     fold_org_pred = np.argmax(fold_org_pred,axis=-1)
+    print(len(fold_org_pred))
     fold_org_prob = np.mean(fold_org_prob,axis=0).tolist()
             
-            
+    print(org_index[0:10])
     for iz in range(7765):
         if iz in org_index:
             idx_prob=[0]*30
@@ -501,7 +505,7 @@ def num_to_label(label):
       숫자로 되어 있던 class를 원본 문자열 라벨로 변환 합니다.
     """
     origin_label = []
-    with open('/opt/ml/bigsmall/dict_num_to_label.pkl', 'rb') as f:
+    with open('dict_num_to_label.pkl', 'rb') as f:
         dict_num_to_label = pickle.load(f)
     for v in label:
         origin_label.append(dict_num_to_label[v])
@@ -608,7 +612,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     # model dir
-    parser.add_argument('--model_dir', type=str, default="/opt/ml/bigsmall/best_models")
+    parser.add_argument('--model_dir', type=str, default="./best_models")
     parser.add_argument(
         '--PLM', type=str, help='model type (example: klue/bert-base)', required=True)
     parser.add_argument(

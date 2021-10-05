@@ -147,14 +147,14 @@ class UnkPreprocessor :
         print('-'*100)
         print('before add unk, tokenizer count:', len(self.tokenizer.vocab.keys()))
         print('sentence unknown token searching...')
-        UNK_sentence_list = chain(*[UNK_word_and_chr(self.tokenizer, s) for s in tqdm(sent)])
+        UNK_sentence_list = chain(*[self.UNK_word_and_chr(self.tokenizer, s) for s in tqdm(sent)])
 
         # for_add = [token for token, cnt in Counter(UNK_sentence_list).items() if cnt >= 10]
         for_add = [token for token, cnt in Counter(UNK_sentence_list).items()]
         print(for_add[:20])
 
         print('entity unknown token searching...')
-        UNK_entity_list = chain(*[UNK_word_and_chr(self.tokenizer, w) for w in tqdm(sub+obj)])
+        UNK_entity_list = chain(*[self.UNK_word_and_chr(self.tokenizer, w) for w in tqdm(sub+obj)])
         # for_add += [token for token, cnt in Counter(UNK_entity_list).items() if cnt >= 2]
         for_add += [token for token, cnt in Counter(UNK_entity_list).items()]
         print('add unk example:', for_add[:20])
@@ -165,6 +165,38 @@ class UnkPreprocessor :
         print('after add unk, toknizer count:', len(self.tokenizer.vocab.keys()))
         print('added_token_num:', added_token_num)
         return self.tokenizer, added_token_num
+
+    def UNK_word_and_chr(self, text:str) -> Tuple[List[str], List[str]]: ## UNK subword 찾기
+        sub_word_UNK_list = []
+        def add_space(match) :
+            bracket = match.group()
+            added = ' ' + bracket + ' '
+            return added
+
+        p = re.compile(r'[\([)\]|,|-|~|-|‘|’|"|\']')
+        words_list = p.sub(add_space, text).split()
+        for word in words_list :
+            subwordpieces_ID_encoded = self.tokenizer.tokenize(word)
+            Known_subword = self.subword_parsing(self.tokenizer, subwordpieces_ID_encoded)
+        
+            for sub_char, NK_char in zip(word, Known_subword) :
+                if sub_char != NK_char and len(word) == len(Known_subword) :
+                    sub_word_UNK_list.append(sub_char)
+                elif sub_char != NK_char and len(word) != len(Known_subword) :
+                    sub_word_UNK_list.append(word)
+                    break
+        return sub_word_UNK_list
+
+    ## subword # 제거용
+    def subword_parsing(self, wordpiece:List) -> List[str]: 
+        Known_char = []
+        for subword in wordpiece :
+            if subword == self.tokenizer.unk_token :
+                Known_char.append(self.tokenizer.unk_token)
+            else :
+                string = subword.replace('#', '')
+                Known_char.extend(string)
+        return Known_char
 
 # Typed Entity Marker
 class EntityPreprocessor :
@@ -179,8 +211,9 @@ class EntityPreprocessor :
 
     def preprocess(self, data) :
         new_sentence = []
-        for row in tqdm(data.values):
-            sentence, subject_entity, object_entity = row[1], eval(row[2]), eval(row[3])
+        for idx in tqdm(range(len(data))):
+            row = data.iloc[idx]
+            sentence, subject_entity, object_entity = row['sentence'], row['subject_entity'], row['object_entity']
             sub_start_idx, sub_end_idx, sub_type = subject_entity['start_idx'], subject_entity['end_idx'], subject_entity['type']
             ob_start_idx, ob_end_idx, ob_type = object_entity[ 'start_idx'], object_entity['end_idx'], object_entity['type']
 
@@ -201,34 +234,3 @@ class EntityPreprocessor :
 
 
 
-def UNK_word_and_chr(self, text:str) -> Tuple[List[str], List[str]]: ## UNK subword 찾기
-    sub_word_UNK_list = []
-    def add_space(match) :
-        bracket = match.group()
-        added = ' ' + bracket + ' '
-        return added
-
-    p = re.compile(r'[\([)\]|,|-|~|-|‘|’|"|\']')
-    words_list = p.sub(add_space, text).split()
-    for word in words_list :
-        subwordpieces_ID_encoded = self.tokenizer.tokenize(word)
-        Known_subword = self.subword_parsing(self.tokenizer, subwordpieces_ID_encoded)
-    
-        for sub_char, NK_char in zip(word, Known_subword) :
-            if sub_char != NK_char and len(word) == len(Known_subword) :
-                sub_word_UNK_list.append(sub_char)
-            elif sub_char != NK_char and len(word) != len(Known_subword) :
-                sub_word_UNK_list.append(word)
-                break
-    return sub_word_UNK_list
-
-## subword # 제거용
-def subword_parsing(self, wordpiece:List) -> List[str]: 
-    Known_char = []
-    for subword in wordpiece :
-        if subword == self.tokenizer.unk_token :
-            Known_char.append(self.tokenizer.unk_token)
-        else :
-            string = subword.replace('#', '')
-            Known_char.extend(string)
-    return Known_char

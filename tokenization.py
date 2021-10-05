@@ -28,7 +28,7 @@ def tokenized_dataset(dataset, tokenizer, is_inference=False):
                 add_special_tokens=True
             )
     else:
-        """ Roberta TTI_flag """
+        """ Roberta TTI_flag with dynamic_padding"""
         if 'roberta' in tokenizer.name_or_path and not 'xlm' in tokenizer.name_or_path:
             tokenized_sentences = tokenizer(
                 concat_entity,

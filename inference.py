@@ -11,6 +11,7 @@ import numpy as np
 import argparse
 import os
 from tqdm import tqdm
+from tokenization import tokenized_dataset
 
 
 def inference(model, tokenized_sent, device, is_roberta=False):

@@ -155,8 +155,12 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
     model_config = AutoConfig.from_pretrained(args.PLM)
     model_config.num_labels = 30
 
-    model = AutoModelForSequenceClassification.from_pretrained(
-        args.PLM, ignore_mismatched_sizes=args.ignore_mismatched, config=model_config)
+    if args.use_mlm:
+        model = AutoModelForSequenceClassification.from_pretrained(
+            args.MLM_checkpoint, config=model_config)
+    else:
+        model = AutoModelForSequenceClassification.from_pretrained(
+            args.PLM, ignore_mismatched_sizes=args.ignore_mismatched, config=model_config)
     
     if args.add_unk_token :
         model.resize_token_embeddings(tokenizer.vocab_size + added_token_num)
@@ -293,6 +297,10 @@ if __name__ == '__main__':
                         help='model save at save_dir/PLM-wandb_unique_tag')
     parser.add_argument('--PLM', type=str, default='klue/bert-base',
                         help='model type (default: klue/bert-base)')
+    parser.add_argument('--MLM_checkpoint', type=str, default='./best_models/klue-roberta-large-pem-mlm',
+                        help='MaskedLM pretrained model path')
+    parser.add_argument('--use_mlm', default=False, action='store_true',
+                        help='whether or not use MaskedLM pretrained model')
     parser.add_argument('--epochs', type=int, default=3,
                         help='number of epochs to train (default: 3)')
     parser.add_argument('--lr', type=float, default=5e-5,

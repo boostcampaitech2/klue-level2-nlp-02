@@ -66,7 +66,7 @@ def inference_ensemble(model_dir, tokenized_sent, device, model_name, is_roberta
         model_config = AutoConfig.from_pretrained(model_name)  ## r_robert
         model_config.num_labels = 30  ## r_robert
         # model_config.update({'output_hidden_states': True})  ## r_robert
-        model = MyModel(args.PLM, config=model_config, dropout_rate=0.1)  ## r_robert
+        model = r_roberta(model, model_config)  ## r_robert
         model.load_state_dict(torch.load(
             os.path.join(model_d, 'pytorch_model.pt')))  ## r_robert
         model.parameters
@@ -178,7 +178,7 @@ def main(args):
     Re_test_dataset = r_RE_Dataset(test_dataset, test_label, tokenizer, entity_ids=True) ## r_robert
 
     if args.k_fold:
-        pred_answer, output_prob = inference_ensemble(model_dir, Re_test_dataset, device, args.PLM, is_roberta)  # model에서 class 추론
+        pred_answer, output_prob = inference_ensemble(model_dir, Re_test_dataset, device, args.PLM, is_roberta, args.r_roberta)  # model에서 class 추론
         pred_answer = np.mean(pred_answer,axis=0)
         pred_answer = np.argmax(pred_answer,axis=-1)
         pred_answer = num_to_label(pred_answer)

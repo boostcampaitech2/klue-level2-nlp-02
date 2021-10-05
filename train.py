@@ -97,27 +97,29 @@ def train(args):
     
     for fold_idx, (train_dataset, test_dataset) in enumerate(datasets):
         
-        #augmnetation
-        aug_data_by_mixing_entity = augmentation_by_resampling(train_dataset) if args.augmentation_flag is True else None
+        #agumentation and preprocessing
+        aug_data_by_mixing_entity = None
+        if args.augmentation_flag is True:
+            aug_data_by_mixing_entity = augmentation_by_resampling(train_dataset)
+            aug_data_by_mixing_entity = preprocessing_dataset(aug_data_by_mixing_entity, sen_preprocessor, entity_preprocessor)
+        train_dataset = preprocessing_dataset(train_dataset, sen_preprocessor, entity_preprocessor)
         aug_data_by_aeda = aeda_dataset(train_dataset) if args.aeda_flag is True else None
-        
+
         #concatenate augmentation data and train data
         train_dataset = pd.concat([train_dataset, aug_data_by_mixing_entity, aug_data_by_aeda])
-
-        #shuffle rows
-        train_dataset = train_dataset.sample(frac=1,random_state=args.seed).reset_index(drop=True)
 
         added_token_num = 0
         if args.add_unk_token :
             tokenizer, added_token_num =  unk_preprocessor(list(train_dataset['sentence']),
                                                            list(train_dataset['subject_entity']),
                                                            list(train_dataset['object_entity']))
-        #preprocessing data
-        train_dataset = preprocessing_dataset(train_dataset, sen_preprocessor, entity_preprocessor)
+        #shuffle rows
+        train_dataset = train_dataset.sample(frac=1,random_state=args.seed).reset_index(drop=True)
+
         train_label = label_to_num(train_dataset['label'].values)
         tokenized_train = tokenized_dataset(train_dataset, tokenizer)
         RE_train_dataset = RE_Dataset(tokenized_train, train_label)
-        
+      
         if args.r_roberta :
             tokenized_train = r_tokenized_dataset(train_dataset, tokenizer)
             RE_train_dataset = r_RE_Dataset(tokenized_train, train_label, tokenizer) ## r_robert
@@ -130,7 +132,7 @@ def train(args):
             RE_dev_dataset = RE_Dataset(tokenized_test, test_label)
             
             if args.r_roberta :
-                tokenized_test = tokenized_dataset(test_dataset, tokenizer)
+                tokenized_test = r_tokenized_dataset(test_dataset, tokenizer)
                 RE_dev_dataset = r_RE_Dataset(tokenized_test, test_label, tokenizer) ## r_robert
         else:
             RE_dev_dataset = RE_train_dataset
@@ -176,11 +178,12 @@ def train_model(
         model = AutoModelForSequenceClassification.from_pretrained(
             args.PLM, ignore_mismatched_sizes=args.ignore_mismatched, config=model_config)
     
-    if args.r_roberta : 
-        model = AutoModel.from_pretrained(args.MLM_checkpoint, config=model_config)
-        model = r_roberta(model, model_config, args.dropout_rate)
+    if args.use_mlm and args.r_roberta : 
+        model = r_roberta(args.MLM_checkpoint, model_config, args.dropout_rate)
+    elif not args.use_mlm and args.r_roberta : 
+        model = r_roberta(args.PLM, model_config, args.dropout_rate)
     
-    if args.add_unk_token :
+    if args.use_mlm and args.add_unk_token :
         model.resize_token_embeddings(tokenizer.vocab_size + added_token_num)
 
     print(model.config)

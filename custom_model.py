@@ -18,10 +18,11 @@ class FCLayer(nn.Module):
         return self.linear(x)
 
 class r_roberta(RobertaPreTrainedModel):
-    def __init__(self, model, config, dropout_rate):
+    def __init__(self, model_name, config, dropout_rate):
         super().__init__(config)
+        config.num_labels = 30
         
-        self.robert = model
+        self.robert = AutoModel.from_pretrained(model_name, config=config)
         self.num_labels = config.num_labels
 
         self.cls_fc_layer = FCLayer(config.hidden_size, config.hidden_size, dropout_rate)

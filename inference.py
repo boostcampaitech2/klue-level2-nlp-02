@@ -1,6 +1,5 @@
 from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, BertTokenizer
 from torch.utils.data import DataLoader
-from load_data import *
 from Preprocessing.preprocessor import EntityPreprocessor, SenPreprocessor, UnkPreprocessor
 import pandas as pd
 import torch
@@ -13,8 +12,11 @@ import os
 from tqdm import tqdm
 from tokenization import tokenized_dataset
 
+from load_data import *
+from custom_model import *
+from tokenization import *
 
-def inference(model, tokenized_sent, device, is_roberta=False):
+def inference(model, tokenized_sent, device, is_roberta=False, is_r_roberta=False):
     """
     test dataset을 DataLoader로 만들어 준 후,
     batch_size로 나눠 model이 예측 합니다.
@@ -25,10 +27,17 @@ def inference(model, tokenized_sent, device, is_roberta=False):
     output_prob = []
     for i, data in enumerate(tqdm(dataloader)):
         with torch.no_grad():
-            if is_roberta:
+            if is_roberta and not is_r_roberta :
                 outputs = model(
                     input_ids=data['input_ids'].to(device),
                     attention_mask=data['attention_mask'].to(device)
+                )
+            elif is_r_roberta :
+                outputs = model(
+                    input_ids=data['input_ids'].to(device),
+                    attention_mask=data['attention_mask'].to(device),
+                    e1_mask=data['e1_mask'].to(device),
+                    e2_mask=data['e2_mask'].to(device)
                 )
             else:
                 outputs = model(
@@ -46,7 +55,7 @@ def inference(model, tokenized_sent, device, is_roberta=False):
 
     return np.concatenate(output_pred).tolist(), np.concatenate(output_prob, axis=0).tolist()
 
-def inference_ensemble(model_dir, tokenized_sent, device, is_roberta=False):
+def inference_ensemble(model_dir, tokenized_sent, device, is_roberta=False, is_r_roberta=False, PLM=None):
     dataloader = DataLoader(tokenized_sent, batch_size=16, shuffle=False)
     
     dirs = os.listdir(model_dir)
@@ -57,6 +66,14 @@ def inference_ensemble(model_dir, tokenized_sent, device, is_roberta=False):
     for i in range(len(dirs)):
         model_d = os.path.abspath(os.path.join(model_dir, dirs[i]))
         model = AutoModelForSequenceClassification.from_pretrained(model_d)
+
+        if is_r_roberta :
+            model_config = AutoConfig.from_pretrained(PLM)
+            model_config.update({'output_hidden_states': True})
+            model = r_roberta(PLM, config=model_config)
+            model.load_state_dict(torch.load(
+                os.path.join(model_d, 'pytorch_model.pt')))
+
         model.parameters
         model.to(device)
         
@@ -65,10 +82,17 @@ def inference_ensemble(model_dir, tokenized_sent, device, is_roberta=False):
         fold_pred=[]
         for i1, data in enumerate(tqdm(dataloader)):
             with torch.no_grad():
-                if is_roberta:
+                if is_roberta and not is_r_roberta:
                     outputs = model(
                         input_ids=data['input_ids'].to(device),
                         attention_mask=data['attention_mask'].to(device),
+                    )
+                elif is_r_roberta :
+                    outputs = model(
+                        input_ids=data['input_ids'].to(device),
+                        attention_mask=data['attention_mask'].to(device),
+                        e1_mask=data['e1_mask'].to(device),
+                        e2_mask=data['e2_mask'].to(device)
                     )
                 else:
                     outputs = model(
@@ -160,10 +184,11 @@ def main(args):
         is_roberta = False
 
     test_id, test_dataset, test_label = load_test_dataset(test_dataset_dir, tokenizer, sen_preprocessor, entity_preprocessor)
-    Re_test_dataset = RE_Dataset(test_dataset, test_label)
+    Re_test_dataset = RE_Dataset(test_dataset, test_label) if args.r_roberta else r_RE_Dataset(test_dataset, test_label, tokenizer)           
+            
 
     if args.k_fold:
-        pred_answer, output_prob = inference_ensemble(model_dir, Re_test_dataset, device, is_roberta)  # model에서 class 추론
+        pred_answer, output_prob = inference_ensemble(model_dir, Re_test_dataset, device, is_roberta, args.r_roberta, args.PLM)  # model에서 class 추론
         pred_answer = np.mean(pred_answer,axis=0)
         pred_answer = np.argmax(pred_answer,axis=-1)
         pred_answer = num_to_label(pred_answer)
@@ -171,11 +196,19 @@ def main(args):
     
     else:
         model = AutoModelForSequenceClassification.from_pretrained(model_dir)
+
+        if args.r_roberta :
+            model_config = AutoConfig.from_pretrained(args.PLM)
+            model_config.update({'output_hidden_states': True})  ## r_robert
+            model = r_roberta(args.PLM, config=model_config)
+            model.load_state_dict(torch.load(
+                os.path.join(model_dir, 'pytorch_model.pt')))
+
         model.parameters
         model.to(device)
         
         pred_answer, output_prob = inference(
-        model, Re_test_dataset, device, is_roberta)  # model에서 class 추론
+        model, Re_test_dataset, device, is_roberta, args.r_roberta)  # model에서 class 추론
         pred_answer = num_to_label(pred_answer)  # 숫자로 된 class를 원래 문자열 라벨로 변환.
 
     # make csv file with predicted answer

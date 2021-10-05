@@ -10,6 +10,7 @@ import numpy as np
 import argparse
 import os
 from tqdm import tqdm
+import gc
 
 from model_custom import *
 
@@ -170,6 +171,10 @@ def main(args):
         test_dataset_dir, tokenizer, args.entity_flag, args.preprocessing_flag, args.mecab_flag)
     Re_test_dataset = RE_Dataset(test_dataset, test_label)
 
+
+    gc.collect()
+    torch.cuda.empty_cache()
+    
     if args.k_fold:
         pred_answer, output_prob = inference_ensemble(
             model_dir, Re_test_dataset, device, args.PLM, is_roberta)  # model에서 class 추론

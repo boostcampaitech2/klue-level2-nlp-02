@@ -11,3 +11,5 @@ wandb/
 
 wandb.env
 pp_test.sh
+test.sh
+test.ipynb

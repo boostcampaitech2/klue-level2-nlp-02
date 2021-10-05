@@ -14,7 +14,8 @@ from pathlib import Path
 import random
 import wandb
 from dotenv import load_dotenv
-
+from augmentation import *
+from tokenization import tokenized_dataset
 
 def klue_re_micro_f1(preds, labels):
     """KLUE-RE micro f1 (except no_relation)"""
@@ -90,67 +91,74 @@ def train(args):
     entity_preprocessor = EntityPreprocessor(args.entity_flag)
 
     # load dataset
-    train_dataset = load_data("/opt/ml/dataset/train/train.csv", sen_preprocessor, entity_preprocessor)
-    train_label = label_to_num(train_dataset['label'].values)
+    datasets = load_data("/opt/ml/dataset/train/train.csv", args.k_fold, args.eval_ratio)
+    
+    for fold_idx, (train_dataset, test_dataset) in enumerate(datasets):
+        
+        #agumentation and preprocessing
+        aug_data_by_mixing_entity = None
+        if args.augmentation_flag is True:
+            aug_data_by_mixing_entity = augmentation_by_resampling(train_dataset)
+            aug_data_by_mixing_entity = preprocessing_dataset(aug_data_by_mixing_entity, sen_preprocessor, entity_preprocessor)
+        train_dataset = preprocessing_dataset(train_dataset, sen_preprocessor, entity_preprocessor)
+        aug_data_by_aeda = aeda_dataset(train_dataset) if args.aeda_flag is True else None
 
-    if args.k_fold:
-        skf = StratifiedKFold(n_splits=args.k_fold, shuffle=True)
+        #concatenate augmentation data and train data
+        train_dataset = pd.concat([train_dataset, aug_data_by_mixing_entity, aug_data_by_aeda])
+
+        #shuffle rows
+        train_dataset = train_dataset.sample(frac=1,random_state=args.seed).reset_index(drop=True)
+
+        train_label = label_to_num(train_dataset['label'].values)
+        tokenized_train = tokenized_dataset(train_dataset, tokenizer)
+        RE_train_dataset = RE_Dataset(tokenized_train, train_label)
+
+        #eval set이 없으면 RE_dev_dataset에 RE_train_dataset 복사하여 사용
+        if test_dataset is not None:
+            test_dataset = preprocessing_dataset(test_dataset, sen_preprocessor, entity_preprocessor)
+            test_label = label_to_num(test_dataset['label'].values)
+            tokenized_test = tokenized_dataset(test_dataset, tokenizer)
+            RE_dev_dataset = RE_Dataset(tokenized_test, test_label)
+        else:
+            RE_dev_dataset = RE_train_dataset
         
         added_token_num = 0
         if args.add_unk_token :
             tokenizer, added_token_num =  unk_preprocessor(list(train_dataset['sentence']),
-                list(train_dataset['subject_entity']),
-                list(train_dataset['object_entity']))
-                                                        
-        for fold_idx, (train_idx, valid_idx) in enumerate(skf.split(train_dataset,train_label),1):
-            train_lists, train_labels = train_dataset.loc[train_idx], list(np.array(train_label)[train_idx])
-            valid_lists, valid_labels = train_dataset.loc[valid_idx], list(np.array(train_label)[valid_idx])
-            
-            tokenized_train = tokenized_dataset(train_lists, tokenizer)  # UNK token count
-            tokenized_valid = tokenized_dataset(valid_lists, tokenizer)  # UNK token count
-            RE_train_dataset = RE_Dataset(tokenized_train, train_labels, args.eval_ratio, args.seed)
-            RE_dev_dataset = RE_Dataset(tokenized_valid, valid_labels, args.eval_ratio, args.seed)
-            
-            load_dotenv(dotenv_path=args.dotenv_path)
-            WANDB_AUTH_KEY = os.getenv('WANDB_AUTH_KEY')
-            wandb.login(key=WANDB_AUTH_KEY)
-
-            wandb.init(
-                entity="klue-level2-nlp-02",
-                project="Relation-Extraction_1001",
-                name=args.wandb_unique_tag+"_"+str(fold_idx),
-                group=args.PLM+"-k_fold")
-
-            wandb.config.update(args)
-            train_model(args=args,RE_train_dataset=RE_train_dataset, RE_dev_dataset=RE_dev_dataset, fold_idx=fold_idx,
-                                 dynamic_padding=dynamic_padding, tokenizer=tokenizer, added_token_num=added_token_num)
-            wandb.finish()
-
-    else:
-        # tokenizing dataset
-        tokenized_train = tokenized_dataset(train_dataset, tokenizer)  # UNK token count
+                                                           list(train_dataset['subject_entity']),
+                                                           list(train_dataset['object_entity']),
+                                                           )
+        #wandb
+        load_dotenv(dotenv_path=args.dotenv_path)
+        WANDB_AUTH_KEY = os.getenv('WANDB_AUTH_KEY')
+        wandb.login(key=WANDB_AUTH_KEY)
         
-        added_token_num = 0
-        if args.add_unk_token :
-            tokenizer, added_token_num =  unk_preprocessor(list(train_dataset['sentence']),
-                list(train_dataset['subject_entity']),
-                list(train_dataset['object_entity']))
+        wandb.init(
+            entity="klue-level2-nlp-02",
+            project="Relation-Extraction_1001",
+            name=args.wandb_unique_tag+"_"+str(fold_idx),
+            group=args.PLM+"-k_fold" if args.k_fold > 0 else args.PLM)
+        wandb.config.update(args)
 
-        RE_train_dataset = RE_Dataset(tokenized_train, train_label, args.eval_ratio, args.seed)
-        
-        train_model(args, RE_train_dataset, RE_dev_dataset=0, fold_idx=0, dynamic_padding=dynamic_padding,
+        train_model(args, RE_train_dataset, RE_dev_dataset, fold_idx=0, dynamic_padding=dynamic_padding,
                      tokenizer=tokenizer, added_token_num=added_token_num)
+
+        wandb.finish()
         
     
-def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,tokenizer,added_token_num):
+def train_model(
+    args,
+    RE_train_dataset,
+    RE_dev_dataset,
+    fold_idx,
+    dynamic_padding,
+    tokenizer,
+    added_token_num):
     
-    # Split validation dataset
-    if args.eval_flag == True and args.k_fold == 0:
-        RE_train_dataset, RE_dev_dataset = RE_train_dataset.split()
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
     print(device)
+
     # setting model hyperparameter
     model_config = AutoConfig.from_pretrained(args.PLM)
     model_config.num_labels = 30
@@ -169,23 +177,19 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
     model.parameters
     model.to(device)
 
-    if args.eval_flag == True or args.k_fold:
-        training_args = TrainingArguments(
+    training_args = TrainingArguments(
             output_dir='./results',          # output directory
             save_total_limit=5,              # number of total save model.
             save_steps=500,                  # model saving step.
             num_train_epochs=args.epochs,              # total number of training epochs
             learning_rate=args.lr,                     # learning_rate
-            # batch size per device during training
-            per_device_train_batch_size=args.train_batch_size,
+            per_device_train_batch_size=args.train_batch_size, # batch size per device during training
             per_device_eval_batch_size=args.eval_batch_size,    # batch size for evaluation
-            # number of warmup steps for learning rate scheduler
-            warmup_steps=args.warmup_steps,
+            warmup_steps=args.warmup_steps, # number of warmup steps for learning rate scheduler
             weight_decay=args.weight_decay,                # strength of weight decay
             logging_dir='./logs',            # directory for storing logs
             logging_steps=100,               # log saving step.
-            # evaluation strategy to adopt during training
-            evaluation_strategy=args.evaluation_strategy,
+            evaluation_strategy=args.evaluation_strategy, # evaluation strategy to adopt during training
             # `no`: No evaluation during training.
             # `steps`: Evaluate every `eval_steps`.
             # `epoch`: Evaluate every end of epoch.
@@ -193,51 +197,16 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
             load_best_model_at_end=True,
             report_to="wandb"
         )
-        trainer = Trainer(
-            # the instantiated 🤗 Transformers model to be trained
-            model=model,
-            args=training_args,                  # training arguments, defined above
-            train_dataset=RE_train_dataset,         # training dataset
-            eval_dataset=RE_dev_dataset,             # evaluation dataset
-            compute_metrics=compute_metrics,         # define metrics function
-            # data_collator=dynamic_padding,
-            tokenizer=tokenizer,
-        )
+    trainer = Trainer(
+        # the instantiated 🤗 Transformers model to be trained
+        model=model,
+        args=training_args,                  # training arguments, defined above
+        train_dataset=RE_train_dataset,         # training dataset
+        eval_dataset=RE_dev_dataset, # evaluation dataset
+        compute_metrics=compute_metrics,         # define metrics function
+        data_collator=dynamic_padding,
+        tokenizer=tokenizer)
 
-    else:
-        training_args = TrainingArguments(
-            output_dir='./results',          # output directory
-            save_total_limit=5,              # number of total save model.
-            save_steps=500,                  # model saving step.
-            num_train_epochs=args.epochs,              # total number of training epochs
-            learning_rate=args.lr,                     # learning_rate
-            # batch size per device during training
-            per_device_train_batch_size=args.train_batch_size,
-            per_device_eval_batch_size=args.eval_batch_size,    # batch size for evaluation
-            # number of warmup steps for learning rate scheduler
-            warmup_steps=args.warmup_steps,
-            weight_decay=args.weight_decay,                # strength of weight decay
-            logging_dir='./logs',            # directory for storing logs
-            logging_steps=100,               # log saving step.
-            # evaluation strategy to adopt during training
-            evaluation_strategy=args.evaluation_strategy,
-            # `no`: No evaluation during training.
-            # `steps`: Evaluate every `eval_steps`.
-            # `epoch`: Evaluate every end of epoch.
-            eval_steps=500,           # evaluation step.
-            load_best_model_at_end=True,
-            report_to="wandb"
-        )
-        trainer = Trainer(
-            # the instantiated 🤗 Transformers model to be trained
-            model=model,
-            args=training_args,                  # training arguments, defined above
-            train_dataset=RE_train_dataset,         # training dataset
-            eval_dataset=RE_train_dataset,             # evaluation dataset
-            compute_metrics=compute_metrics,         # define metrics function
-            data_collator=dynamic_padding,
-            tokenizer=tokenizer,
-        )
 
     # train model
     trainer.train()
@@ -259,24 +228,6 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
         
         if args.add_unk_token :
             tokenizer.save_pretrained(model_save_pth+'/tokenizer')
-
-
-def main(args):
-    if args.k_fold == 0:
-        load_dotenv(dotenv_path=args.dotenv_path)
-        WANDB_AUTH_KEY = os.getenv('WANDB_AUTH_KEY')
-        wandb.login(key=WANDB_AUTH_KEY)
-
-        wandb.init(
-            entity="klue-level2-nlp-02",
-            project="Relation-Extraction_1001",
-            name=args.wandb_unique_tag,
-            group=args.PLM)
-        wandb.config.update(args)
-        train(args)
-        wandb.finish()
-    else:
-        train(args)
 
 
 def seed_everything(seed):
@@ -337,8 +288,7 @@ if __name__ == '__main__':
     # Running mode
     parser.add_argument('--entity_flag', default=False, action='store_true',
                         help='add Entity flag (default: False)')
-    # parser.add_argument('--preprocessing_flag', default=False, action='store_true',
-    #                     help='input text pre-processing (default: False)')
+    
     parser.add_argument('--preprocessing_cmb', nargs='+',
                         help='<Required> Set flag (example: 0 1 2)')
 
@@ -346,13 +296,21 @@ if __name__ == '__main__':
                         help='input text pre-processing (default: False)')
     
     parser.add_argument('--add_unk_token', default=False, action='store_true',
-                    help='add unknown token in vocab (default: False)')
+                        help='add unknown token in vocab (default: False)')
     
-    parser.add_argument("--k_fold", type=int, default=0, help='not k fold(defalut: 0)')
+    parser.add_argument("--k_fold", type=int, default=0,
+                        help='not k fold(defalut: 0)')
+
+    parser.add_argument('--aeda_flag', type=bool, default=False,
+                        help='Number of adea agmentations (default: 0)')
+
+    parser.add_argument('--augmentation_flag', type=bool, default=False,
+                        help="data augmentation by resampling")
     
     args = parser.parse_args()
 
     # Start
     seed_everything(args.seed)
 
-    main(args)
+    # main(args)
+    train(args)

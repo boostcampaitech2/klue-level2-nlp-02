@@ -21,13 +21,13 @@ class MyModel(nn.Module):
         self.num_labels = config.num_labels
         self.config = config
 
-        self.dense = nn.Linear(config.hidden_size*4, config.hidden_size*4)
+        self.dense = nn.Linear(config.hidden_size*4, config.hidden_size)
 
         classifier_dropout = (
             config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
         )
         self.dropout = nn.Dropout(classifier_dropout)
-        self.out_proj = nn.Linear(config.hidden_size*4, config.num_labels)
+        self.out_proj = nn.Linear(config.hidden_size, config.num_labels)
 
     def forward(
         self,
@@ -190,7 +190,7 @@ class MyModelForFreeze(nn.Module):
                 loss = loss_fct(logits, labels)
 
         if not return_dict:
-            output = (logits,) + outputs[3:]
+            output = (logits,) + outputs[2:]
             return ((loss,) + output) if loss is not None else output
 
         return (

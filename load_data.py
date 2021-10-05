@@ -1,69 +1,34 @@
 import pickle as pickle
-import os
-import re
 import pandas as pd
 import collections
 import random
 import torch
-from tqdm import tqdm
 from torch.utils.data import Dataset, Subset
+from sklearn.model_selection import StratifiedKFold
 
 class RE_Dataset(Dataset):
     """ Dataset 구성을 위한 class."""
-    def __init__(self, pair_dataset, labels,
-                 val_ratio=0.2, seed=2):
-        random.seed(seed)
-        self.pair_dataset = pair_dataset
+    def __init__(self, dataset, labels,
+                #  val_ratio=0.2, seed=2
+                 ):
+        # random.seed(seed)
+        self.dataset = dataset
         self.labels = labels
-        self.val_ratio = val_ratio
+        # self.val_ratio = val_ratio
 
     def __getitem__(self, idx):
-        item = {key: val[idx] for key, val in self.pair_dataset.items()}
+        item = {key: val[idx] for key, val in self.dataset.items()} #id,sentence, subject_entity,object_entity,label
         item['labels'] = torch.tensor(self.labels[idx])
         return item
 
     def __len__(self):
         return len(self.labels)
 
-    def split(self):
-        data_size = len(self)
-        index_map = collections.defaultdict(list)
-        for idx in range(data_size):
-            label = self.labels[idx]
-            index_map[label].append(idx)
-
-        train_data = []
-        val_data = []
-
-        label_size = len(index_map)
-        for label in range(label_size):
-            idx_list = index_map[label]
-            sample_size = int(len(idx_list) * self.val_ratio)
-
-            val_index = random.sample(idx_list, sample_size)
-            train_index = list(set(idx_list) - set(val_index))
-
-            train_data.extend(train_index)
-            val_data.extend(val_index)
-
-        random.shuffle(train_data)
-        random.shuffle(val_data)
-
-        train_dset = Subset(self, train_data)
-        val_dset = Subset(self, val_data)
-        return train_dset, val_dset
-
 
 def preprocessing_dataset(dataset, sen_preprocessor, entity_preprocessor):
     """ 처음 불러온 csv 파일을 원하는 형태의 DataFrame으로 변경 시켜줍니다."""
-    subject_entity = []
-    object_entity = []
-    # sentence에 entity 속성 추가
-    for i, j in zip(dataset['subject_entity'], dataset['object_entity']):
-        i = eval(i)['word']
-        j = eval(j)['word']
-        subject_entity.append(i)
-        object_entity.append(j)
+    
+    subject_entity, object_entity = list(zip(*dataset.apply(lambda x : [x['subject_entity']['word'], x['object_entity']['word']], axis=1)))
 
     # Data Sentence Entity processor
     dataset = entity_preprocessor(dataset)
@@ -82,71 +47,59 @@ def preprocessing_dataset(dataset, sen_preprocessor, entity_preprocessor):
     return out_dataset
 
 
-def load_data(dataset_dir, sen_preprocessor, entity_preprocessor):
-    """ csv 파일을 경로에 맡게 불러 옵니다. """
-    pd_dataset = pd.read_csv(dataset_dir)
-    if 'train' in dataset_dir:
-        # 완전 중복 제거 42개
-        pd_dataset = pd_dataset.drop_duplicates(
-            ['sentence', 'subject_entity', 'object_entity', 'label'], keep='first')
-        # 라벨링이 다른 데이터 제거
-        pd_dataset = pd_dataset.drop(index=[6749, 8364, 22258, 277, 25094])
-        pd_dataset = pd_dataset.reset_index(drop=True)
-        print("Finish remove duplicated data")
+def load_data(dataset_dir, k_fold=None, val_ratio=0):
+    """ 
+        csv 파일을 경로에 맡게 불러 옵니다. 
+        k_fold와 val_ratio를 통해 train data와 validation data를 나눕니다.
+        단, k_fold가 우선순위고, k_fold가 없을 경우 val_ratio에 따라 split을 진행합니다.
+    """
+    dataset = pd.read_csv(dataset_dir)
+    dataset = dataset.drop_duplicates(['sentence', 'subject_entity', 'object_entity', 'label'], keep='first')
+    
+    # 라벨링이 다른 데이터 제거
+    dataset = dataset.drop(index=[6749, 8364, 22258, 277, 25094])
+    dataset = dataset.reset_index(drop=True)
+    
+    #datatype 변경
+    dataset['subject_entity'] = dataset.subject_entity.map(eval)
+    dataset['object_entity'] = dataset.object_entity.map(eval)
+    print(">>>>>>>>>>Finish pre processing loaded data(drop duplicated and miss-labeled data")
 
-    dataset = preprocessing_dataset(pd_dataset, sen_preprocessor, entity_preprocessor)
-    return dataset
+    if k_fold > 0: # split by kfold
+        return split_by_kfolds(dataset, k_fold)
+    elif val_ratio > 0: # split by val_ratio
+        return split_by_val_ratio(dataset,val_ratio)
+    else: # not split
+        return [[dataset,None]]
 
 
-def tokenized_dataset(dataset, tokenizer, is_inference=False):
-    """ tokenizer에 따라 sentence를 tokenizing 합니다."""
-    concat_entity = []
-    for e01, e02 in zip(dataset['subject_entity'], dataset['object_entity']):
-        temp = ''
-        temp = e01 + '[SEP]' + e02
-        concat_entity.append(temp)
+def split_by_kfolds(dataset, k_fold):
+    X = dataset.drop(["label"], axis=1)
+    y = dataset["label"]
+    skf = StratifiedKFold(n_splits=k_fold, shuffle=True)
+    return [[dataset.iloc[train_dset], dataset.iloc[val_dset]]  for train_dset, val_dset in skf.split(X,y)]
 
-    if is_inference:
-        """ Roberta TTI_flag """
-        if 'roberta' in tokenizer.name_or_path and not 'xlm' in tokenizer.name_or_path:
-            tokenized_sentences = tokenizer(
-                concat_entity,
-                list(dataset['sentence']),
-                return_tensors="pt",
-                padding=True,
-                truncation=True,
-                max_length=256,
-                add_special_tokens=True,
-                return_token_type_ids=False
-            )
-        else:
-            tokenized_sentences = tokenizer(
-                concat_entity,
-                list(dataset['sentence']),
-                return_tensors="pt",
-                padding=True,
-                truncation=True,
-                max_length=256,
-                add_special_tokens=True
-            )
-    else:
-        """ Roberta TTI_flag """
-        if 'roberta' in tokenizer.name_or_path and not 'xlm' in tokenizer.name_or_path:
-            tokenized_sentences = tokenizer(
-                concat_entity,
-                list(dataset['sentence']),
-                truncation=True,
-                max_length=256,
-                add_special_tokens=True,
-                return_token_type_ids=False
-            )
-        else:
-            tokenized_sentences = tokenizer(
-                concat_entity,
-                list(dataset['sentence']),
-                truncation=True,
-                max_length=256,
-                add_special_tokens=True
-            )
+def split_by_val_ratio(dataset,val_ratio):
+    data_size = len(dataset)
+    index_map = collections.defaultdict(list)
+    for idx in range(data_size):
+        label = dataset.iloc[idx]['label']
+        index_map[label].append(idx)
+    train_indices = []
+    val_indices = []
 
-    return tokenized_sentences
+    for label in index_map.keys():
+        idx_list = index_map[label]
+        val_size = int(len(idx_list) * val_ratio)
+
+        val_index = random.sample(idx_list, val_size)
+        train_index = list(set(idx_list) - set(val_index))
+
+        train_indices.extend(train_index)
+        val_indices.extend(val_index)
+
+    random.shuffle(train_indices)
+    random.shuffle(val_indices)
+    train_dset = dataset.iloc[train_indices]
+    val_dset = dataset.iloc[val_indices]
+    return [[train_dset, val_dset]]

@@ -1,7 +1,12 @@
+._*
+.*.*
 .ipynb_checkpoints/
 __pycache__/
 best_model/**
+best_models/**
 results/**
-
+prediction/**
 wandb/
+
 wandb.env
+pp_test.sh

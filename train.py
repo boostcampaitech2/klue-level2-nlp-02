@@ -140,7 +140,7 @@ def train(args):
             group=args.PLM+"-k_fold" if args.k_fold > 0 else args.PLM)
         wandb.config.update(args)
 
-        train_model(args, RE_train_dataset, RE_dev_dataset, fold_idx=0, dynamic_padding=dynamic_padding,
+        train_model(args, RE_train_dataset, RE_dev_dataset, fold_idx=fold_idx, dynamic_padding=dynamic_padding,
                      tokenizer=tokenizer, added_token_num=added_token_num)
 
         wandb.finish()

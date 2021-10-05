@@ -96,8 +96,10 @@ def train(args):
     for fold_idx, (train_dataset, test_dataset) in enumerate(datasets):
         
         #agumentation and preprocessing
-        aug_data_by_mixing_entity = augmentation_by_resampling(train_dataset) if args.augmentation_flag is True else None
-        aug_data_by_mixing_entity = preprocessing_dataset(aug_data_by_mixing_entity, sen_preprocessor, entity_preprocessor)
+        aug_data_by_mixing_entity = None
+        if args.augmentation_flag is True:
+            aug_data_by_mixing_entity = augmentation_by_resampling(train_dataset)
+            aug_data_by_mixing_entity = preprocessing_dataset(aug_data_by_mixing_entity, sen_preprocessor, entity_preprocessor)
         train_dataset = preprocessing_dataset(train_dataset, sen_preprocessor, entity_preprocessor)
         aug_data_by_aeda = aeda_dataset(train_dataset) if args.aeda_flag is True else None
 

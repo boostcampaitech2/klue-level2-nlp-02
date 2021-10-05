@@ -47,29 +47,32 @@ def preprocessing_dataset(dataset, sen_preprocessor, entity_preprocessor):
     return out_dataset
 
 
-def load_data(dataset_dir, k_fold=None, val_ratio=0):
+def load_data(dataset_dir, k_fold=0, val_ratio=0, train=True):
     """ 
         csv 파일을 경로에 맡게 불러 옵니다. 
         k_fold와 val_ratio를 통해 train data와 validation data를 나눕니다.
         단, k_fold가 우선순위고, k_fold가 없을 경우 val_ratio에 따라 split을 진행합니다.
     """
     dataset = pd.read_csv(dataset_dir)
-    dataset = dataset.drop_duplicates(['sentence', 'subject_entity', 'object_entity', 'label'], keep='first')
-    
-    # 라벨링이 다른 데이터 제거
-    dataset = dataset.drop(index=[6749, 8364, 22258, 277, 25094])
-    dataset = dataset.reset_index(drop=True)
+    if train == True:
+        dataset = dataset.drop_duplicates(['sentence', 'subject_entity', 'object_entity', 'label'], keep='first')
+        
+        # 라벨링이 다른 데이터 제거
+        dataset = dataset.drop(index=[6749, 8364, 22258, 277, 25094])
+        dataset = dataset.reset_index(drop=True)
     
     #datatype 변경
     dataset['subject_entity'] = dataset.subject_entity.map(eval)
     dataset['object_entity'] = dataset.object_entity.map(eval)
     print(">>>>>>>>>>Finish pre processing loaded data(drop duplicated and miss-labeled data")
 
-    if k_fold > 0: # split by kfold
+    if k_fold > 0 and train == True: # train, split by kfold
         return split_by_kfolds(dataset, k_fold)
-    elif val_ratio > 0: # split by val_ratio
+    elif val_ratio > 0: # train, split by val_ratio
         return split_by_val_ratio(dataset,val_ratio)
-    else: # not split
+    elif train == False: #inference
+        return dataset
+    else: # train, not split
         return [[dataset,None]]
 
 
@@ -78,6 +81,7 @@ def split_by_kfolds(dataset, k_fold):
     y = dataset["label"]
     skf = StratifiedKFold(n_splits=k_fold, shuffle=True)
     return [[dataset.iloc[train_dset], dataset.iloc[val_dset]]  for train_dset, val_dset in skf.split(X,y)]
+
 
 def split_by_val_ratio(dataset,val_ratio):
     data_size = len(dataset)

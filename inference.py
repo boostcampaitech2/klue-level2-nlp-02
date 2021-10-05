@@ -63,7 +63,7 @@ def inference_ensemble(model_dir, tokenized_sent, device, is_roberta=False):
         model.eval()
         fold_prob=[]
         fold_pred=[]
-        for i1, data in enumerate(tqdm(dataloader)):
+        for data in tqdm(dataloader):
             with torch.no_grad():
                 if is_roberta:
                     outputs = model(
@@ -107,9 +107,10 @@ def load_test_dataset(dataset_dir, tokenizer, sen_preprocessor, entity_preproces
       test dataset을 불러온 후,
       tokenizing 합니다.
     """
-    test_dataset = load_data(dataset_dir, sen_preprocessor, entity_preprocessor)
+    test_dataset = load_data(dataset_dir, train=False)
+    test_dataset = preprocessing_dataset(test_dataset, sen_preprocessor, entity_preprocessor)
     test_label = list(map(int, test_dataset['label'].values))
-
+    
     # tokenizing dataset
     tokenized_test = tokenized_dataset(
         test_dataset, tokenizer, is_inference=True)

@@ -14,6 +14,7 @@ from tqdm import tqdm
 from tokenization import tokenized_dataset
 from model import *
 
+
 def inference(model, tokenized_sent, device, is_roberta=False):
     """
     test dataset을 DataLoader로 만들어 준 후,
@@ -46,34 +47,35 @@ def inference(model, tokenized_sent, device, is_roberta=False):
 
     return np.concatenate(output_pred).tolist(), np.concatenate(output_prob, axis=0).tolist()
 
+
 def inference_ensemble(model_dir, tokenized_sent, device, is_roberta=False):
     dataloader = DataLoader(tokenized_sent, batch_size=16, shuffle=False)
-    
+
     dirs = os.listdir(model_dir)
     dirs = sorted(dirs)
-    
-    final_output_prob=[]
-    final_output_pred=[]
+
+    final_output_prob = []
+    final_output_pred = []
     for i in range(len(dirs)):
         model_config = AutoConfig.from_pretrained(args.PLM)
         model_config.num_labels = 30
         model_d = os.path.abspath(os.path.join(model_dir, dirs[i]))
         if args.model_name == 'ConcatFourClsModel':
             model_config.update({'output_hidden_states': True})
-            model = ConcatFourClsModel(model_d, config=model_config)
+            model = ConcatFourClsModel(args.PLM, config=model_config)
         elif args.model_name == 'AddFourClassifierRoberta':
-            model = AddFourClassifierRoberta(model_d, config=model_config)
+            model = AddFourClassifierRoberta(args.PLM, config=model_config)
         elif args.model_name == 'AddLayerNorm':
-            model = AddLayerNorm(model_d, config=model_config)
-            
-        
+            model = AddLayerNorm(args.PLM, config=model_config)
+        model.load_state_dict(torch.load(
+            os.path.join(model_d, 'pytorch_model.pt')))
         model.parameters
         model.to(device)
-        
+
         model.eval()
-        fold_prob=[]
-        fold_pred=[]
-        for i1, data in enumerate(tqdm(dataloader)):
+        fold_prob = []
+        fold_pred = []
+        for data in tqdm(dataloader):
             with torch.no_grad():
                 if is_roberta:
                     outputs = model(
@@ -89,13 +91,13 @@ def inference_ensemble(model_dir, tokenized_sent, device, is_roberta=False):
             logits = outputs[0]
             prob = F.softmax(logits, dim=-1).detach().cpu().numpy()
             logits = logits.detach().cpu().numpy()
-            
+
             fold_pred.extend(logits.tolist())
             fold_prob.append(prob)
-        
+
         final_output_pred.append(fold_pred)
         final_output_prob.append(np.concatenate(fold_prob, axis=0).tolist())
-        
+
     return final_output_pred, final_output_prob
 
 
@@ -118,7 +120,8 @@ def load_test_dataset(dataset_dir, tokenizer, sen_preprocessor, entity_preproces
       tokenizing 합니다.
     """
     test_dataset = load_data(dataset_dir, train=False)
-    test_dataset = preprocessing_dataset(test_dataset, sen_preprocessor, entity_preprocessor)
+    test_dataset = preprocessing_dataset(
+        test_dataset, sen_preprocessor, entity_preprocessor)
     test_label = list(map(int, test_dataset['label'].values))
 
     # tokenizing dataset
@@ -163,41 +166,45 @@ def main(args):
 
     if args.PLM in ['klue/roberta-base', 'klue/roberta-small', 'klue/roberta-large']:
         is_roberta = True
-        if args.add_unk_token :
+        if args.add_unk_token:
             print(model_dir+'/tokenizer')
             tokenizer = BertTokenizer.from_pretrained(model_dir+'/tokenizer')
-            print('new vocab size:', len(tokenizer.vocab)+len(tokenizer.get_added_vocab()))
+            print('new vocab size:', len(tokenizer.vocab) +
+                  len(tokenizer.get_added_vocab()))
     else:
         is_roberta = False
 
-    test_id, test_dataset, test_label = load_test_dataset(test_dataset_dir, tokenizer, sen_preprocessor, entity_preprocessor)
+    test_id, test_dataset, test_label = load_test_dataset(
+        test_dataset_dir, tokenizer, sen_preprocessor, entity_preprocessor)
     Re_test_dataset = RE_Dataset(test_dataset, test_label)
 
     if args.k_fold:
-        pred_answer, output_prob = inference_ensemble(model_dir, Re_test_dataset, device, is_roberta)  # model에서 class 추론
-        pred_answer = np.mean(pred_answer,axis=0)
-        pred_answer = np.argmax(pred_answer,axis=-1)
+        pred_answer, output_prob = inference_ensemble(
+            model_dir, Re_test_dataset, device, is_roberta)  # model에서 class 추론
+        pred_answer = np.mean(pred_answer, axis=0)
+        pred_answer = np.argmax(pred_answer, axis=-1)
         pred_answer = num_to_label(pred_answer)
-        output_prob = np.mean(output_prob,axis=0).tolist()
-    
+        output_prob = np.mean(output_prob, axis=0).tolist()
+
     else:
         model_config = AutoConfig.from_pretrained(args.PLM)
         model_config.num_labels = 30
         if args.model_name == 'ConcatFourClsModel':
             model_config.update({'output_hidden_states': True})
-            model = ConcatFourClsModel(model_dir, config=model_config)
+            model = ConcatFourClsModel(args.PLM, config=model_config)
 
         elif args.model_name == 'AddFourClassifierRoberta':
-            model = AddFourClassifierRoberta(model_dir, config=model_config)
+            model = AddFourClassifierRoberta(args.PLM, config=model_config)
 
         elif args.model_name == 'AddLayerNorm':
-            model = AddLayerNorm(model_dir, config=model_config)
-
+            model = AddLayerNorm(args.PLM, config=model_config)
+        model.load_state_dict(torch.load(
+            os.path.join(model_dir, 'pytorch_model.pt')))
         model.parameters
         model.to(device)
-        
+
         pred_answer, output_prob = inference(
-        model, Re_test_dataset, device, is_roberta)  # model에서 class 추론
+            model, Re_test_dataset, device, is_roberta)  # model에서 class 추론
         pred_answer = num_to_label(pred_answer)  # 숫자로 된 class를 원래 문자열 라벨로 변환.
 
     # make csv file with predicted answer
@@ -208,7 +215,7 @@ def main(args):
 
     sub_name = model_dir.split('/')[-1]
     # 최종적으로 완성된 예측한 라벨 csv 파일 형태로 저장.
-    output.to_csv(f"./prediction/submission_{sub_name}.csv", index=False)
+    output.to_csv(f"./prediction/submission_{sub_name}_2.csv", index=False)
     #### 필수!! ##############################################
     print('---- Finish! ----')
 
@@ -232,9 +239,10 @@ if __name__ == '__main__':
         '--add_unk_token', default=False, action='store_true', help='add unknown token in vocab (default: False)')
     parser.add_argument('--model_name', type=str, default='ConcatFourClsModel',
                         help='model type (default: klue/bert-base)')
-    
-    parser.add_argument("--k_fold", type=int, default=0, help='not k fold(defalut: 0)')
-    
+
+    parser.add_argument("--k_fold", type=int, default=0,
+                        help='not k fold(defalut: 0)')
+
     args = parser.parse_args()
     print(args)
 

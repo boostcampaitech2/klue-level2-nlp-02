@@ -189,12 +189,12 @@ def train_model(
             weight_decay=args.weight_decay,                # strength of weight decay
             logging_dir='./logs',            # directory for storing logs
             logging_steps=100,               # log saving step.
-            evaluation_strategy=args.evaluation_strategy, # evaluation strategy to adopt during training
+            evaluation_strategy=args.evaluation_strategy if args.eval_flag else 'no', # evaluation strategy to adopt during training
             # `no`: No evaluation during training.
             # `steps`: Evaluate every `eval_steps`.
             # `epoch`: Evaluate every end of epoch.
-            eval_steps=500,           # evaluation step.
-            load_best_model_at_end=True,
+            eval_steps=500 if args.eval_flag else 0,           # evaluation step.
+            load_best_model_at_end=True if args.eval_flag else False,
             report_to="wandb"
         )
     trainer = Trainer(
@@ -202,7 +202,7 @@ def train_model(
         model=model,
         args=training_args,                  # training arguments, defined above
         train_dataset=RE_train_dataset,         # training dataset
-        eval_dataset=RE_dev_dataset, # evaluation dataset
+        eval_dataset=RE_dev_dataset if args.eval_flag else None, # evaluation dataset
         compute_metrics=compute_metrics,         # define metrics function
         data_collator=dynamic_padding,
         tokenizer=tokenizer)
@@ -268,8 +268,8 @@ if __name__ == '__main__':
                         help='ignore mismatched size when load pretrained model')
 
     # Validation
-    parser.add_argument('--eval_flag', default=True, action='store_true',
-                        help='eval flag (default: True)')
+    parser.add_argument('--eval_flag', default=False, action='store_true',
+                        help='eval flag (default: False)')
     parser.add_argument('--eval_ratio', type=float, default=0.2,
                         help='eval data size ratio (default: 0.2)')
     parser.add_argument('--eval_batch_size', type=int,

@@ -33,8 +33,8 @@ def tokenized_dataset(dataset, tokenizer, is_inference=False):
             tokenized_sentences = tokenizer(
                 concat_entity,
                 list(dataset['sentence']),
-                return_tensors="pt",
-                padding=True,
+                # return_tensors="pt",
+                # padding=True,
                 truncation=True,
                 max_length=256,
                 add_special_tokens=True,
@@ -44,8 +44,8 @@ def tokenized_dataset(dataset, tokenizer, is_inference=False):
             tokenized_sentences = tokenizer(
                 concat_entity,
                 list(dataset['sentence']),
-                return_tensors="pt",
-                padding=True,
+                # return_tensors="pt",
+                # padding=True,
                 truncation=True,
                 max_length=256,
                 add_special_tokens=True

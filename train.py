@@ -6,7 +6,7 @@ import sklearn
 import numpy as np
 from sklearn.model_selection import train_test_split, StratifiedKFold
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
-from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer, DataCollatorWithPadding
+from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer, DataCollatorWithPadding, EarlyStoppingCallback
 from load_data import *
 from Preprocessing.preprocessor import EntityPreprocessor, SenPreprocessor, UnkPreprocessor
 import argparse
@@ -177,6 +177,10 @@ def train_model(
     model.parameters
     model.to(device)
 
+    early_stopping=None
+    if args.early_stopping_patience > 0 :
+        early_stopping = EarlyStoppingCallback(early_stopping_patience = args.early_stopping_patience)
+
     training_args = TrainingArguments(
             output_dir='./results',          # output directory
             save_total_limit=5,              # number of total save model.
@@ -205,7 +209,9 @@ def train_model(
         eval_dataset=RE_dev_dataset, # evaluation dataset
         compute_metrics=compute_metrics,         # define metrics function
         data_collator=dynamic_padding,
-        tokenizer=tokenizer)
+        tokenizer=tokenizer,
+        callbacks=[early_stopping],
+        )
 
 
     # train model
@@ -306,6 +312,10 @@ if __name__ == '__main__':
 
     parser.add_argument('--augmentation_flag', type=bool, default=False,
                         help="data augmentation by resampling")
+
+    # early stopping
+    parser.add_argument('--early_stopping_patience', type=int, default=0,
+                         help='early stopping patience (default : 0)')
     
     args = parser.parse_args()
 

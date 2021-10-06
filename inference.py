@@ -64,8 +64,9 @@ def inference_ensemble(model_dir, tokenized_sent, device, is_roberta=False, is_r
     final_output_prob=[]
     final_output_pred=[]
     for i in range(len(dirs)):
+        model_d = os.path.abspath(os.path.join(model_dir, dirs[i]))
+        
         if not is_r_roberta :
-            model_d = os.path.abspath(os.path.join(model_dir, dirs[i]))
             model = AutoModelForSequenceClassification.from_pretrained(model_d)
         else :
             model_config = AutoConfig.from_pretrained(PLM)

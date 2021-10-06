@@ -91,7 +91,7 @@ def train(args):
     entity_preprocessor = EntityPreprocessor(args.entity_flag)
 
     # load dataset
-    datasets = load_data("/opt/ml/dataset/train/train.csv", args.k_fold, args.eval_ratio)
+    datasets = load_data("/opt/ml/dataset/train/train_rtt.csv", args.k_fold, args.eval_ratio)
     
     for fold_idx, (train_dataset, test_dataset) in enumerate(datasets):
         

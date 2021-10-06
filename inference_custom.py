@@ -55,8 +55,18 @@ def inference_ensemble(model_dir, tokenized_sent, device, is_roberta=False):
     final_output_prob=[]
     final_output_pred=[]
     for i in range(len(dirs)):
+        model_config = AutoConfig.from_pretrained(args.PLM)
+        model_config.num_labels = 30
         model_d = os.path.abspath(os.path.join(model_dir, dirs[i]))
-        model = AutoModelForSequenceClassification.from_pretrained(model_d)
+        if args.model_name == 'ConcatFourClsModel':
+            model_config.update({'output_hidden_states': True})
+            model = ConcatFourClsModel(model_d, config=model_config)
+        elif args.model_name == 'AddFourClassifierRoberta':
+            model = AddFourClassifierRoberta(model_d, config=model_config)
+        elif args.model_name == 'AddLayerNorm':
+            model = AddLayerNorm(model_d, config=model_config)
+            
+        
         model.parameters
         model.to(device)
         
@@ -175,12 +185,13 @@ def main(args):
         model_config.num_labels = 30
         if args.model_name == 'ConcatFourClsModel':
             model_config.update({'output_hidden_states': True})
-            model = ConcatFourClsModel(args.PLM, config=model_config)
+            model = ConcatFourClsModel(model_dir, config=model_config)
 
         elif args.model_name == 'AddFourClassifierRoberta':
-            model = AddFourClassifierRoberta(args.PLM, config=model_config)
-        
-        model.load_state_dict(torch.load(os.path.join(model_dir, 'pytorch_model.pt')))
+            model = AddFourClassifierRoberta(model_dir, config=model_config)
+
+        elif args.model_name == 'AddLayerNorm':
+            model = AddLayerNorm(model_dir, config=model_config)
 
         model.parameters
         model.to(device)

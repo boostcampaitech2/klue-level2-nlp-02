@@ -93,8 +93,11 @@ def train(args):
     entity_preprocessor = EntityPreprocessor(args.entity_flag)
 
     # load dataset
-    datasets = load_data("/opt/ml/dataset/train/train.csv", args.k_fold, args.eval_ratio)
-    
+    if not args.use_rtt :
+        datasets = load_data("/opt/ml/dataset/train/train.csv", args.k_fold, args.eval_ratio)
+    else :
+        datasets = load_data("/opt/ml/dataset/train/train_rtt.csv", args.k_fold, args.eval_ratio)
+
     for fold_idx, (train_dataset, test_dataset) in enumerate(datasets):
         
         #agumentation and preprocessing
@@ -149,7 +152,7 @@ def train(args):
             group=args.PLM+"-k_fold" if args.k_fold > 0 else args.PLM)
         wandb.config.update(args)
 
-        train_model(args, RE_train_dataset, RE_dev_dataset, fold_idx=0, dynamic_padding=dynamic_padding,
+        train_model(args, RE_train_dataset, RE_dev_dataset, fold_idx=fold_idx, dynamic_padding=dynamic_padding,
                      tokenizer=tokenizer, added_token_num=added_token_num)
 
         wandb.finish()
@@ -266,7 +269,7 @@ if __name__ == '__main__':
                         help='model save at save_dir/PLM-wandb_unique_tag')
     parser.add_argument('--PLM', type=str, default='klue/bert-base',
                         help='model type (default: klue/bert-base)')
-    parser.add_argument('--MLM_checkpoint', type=str, default='./best_models/klue-roberta-large-pem-mlm',
+    parser.add_argument('--MLM_checkpoint', type=str, default='./best_models/klue-roberta-large-tapt-rtt-mlm',
                         help='MaskedLM pretrained model path')
     parser.add_argument('--use_mlm', default=False, action='store_true',
                         help='whether or not use MaskedLM pretrained model')
@@ -306,8 +309,8 @@ if __name__ == '__main__':
                         help='input your wandb unique tag (default: bert-base-high-lr)')
 
     # Running mode
-    parser.add_argument('--entity_flag', default=False, action='store_true',
-                        help='add Entity flag (default: False)')
+    parser.add_argument('--entity_flag', type=int, default=0,
+                        help='1: original 2: single (default: 0)')
     
     parser.add_argument('--preprocessing_cmb', nargs='+',
                         help='<Required> Set flag (example: 0 1 2)')
@@ -329,6 +332,9 @@ if __name__ == '__main__':
 
     parser.add_argument('--r_roberta', default=False, action='store_true',
                         help=' custom model to r_roberta(default: False)')
+    
+    parser.add_argument('--use_rtt', default=False, action='store_true',
+                    help='whether or not use rtt augmented dataset')
     
     args = parser.parse_args()
 

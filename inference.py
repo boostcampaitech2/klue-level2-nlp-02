@@ -64,10 +64,10 @@ def inference_ensemble(model_dir, tokenized_sent, device, is_roberta=False, is_r
     final_output_prob=[]
     final_output_pred=[]
     for i in range(len(dirs)):
-        model_d = os.path.abspath(os.path.join(model_dir, dirs[i]))
-        model = AutoModelForSequenceClassification.from_pretrained(model_d)
-
-        if is_r_roberta :
+        if not is_r_roberta :
+            model_d = os.path.abspath(os.path.join(model_dir, dirs[i]))
+            model = AutoModelForSequenceClassification.from_pretrained(model_d)
+        else :
             model_config = AutoConfig.from_pretrained(PLM)
             model_config.update({'output_hidden_states': True})
             model = r_roberta(PLM, config=model_config)
@@ -125,14 +125,16 @@ def num_to_label(label):
 
     return origin_label
 
-
 def load_test_dataset(dataset_dir, tokenizer, sen_preprocessor, entity_preprocessor):
     """
       test dataset을 불러온 후,
       tokenizing 합니다.
     """
-    test_dataset = load_data(dataset_dir, sen_preprocessor, entity_preprocessor)
+    test_dataset = load_data(dataset_dir)[0][0]
+    # test_label = list(map(int, test_dataset['label'].values))
     test_label = list(map(int, test_dataset['label'].values))
+    
+    test_dataset = preprocessing_dataset(test_dataset, sen_preprocessor, entity_preprocessor)
 
     # tokenizing dataset
     tokenized_test = tokenized_dataset(
@@ -184,7 +186,7 @@ def main(args):
         is_roberta = False
 
     test_id, test_dataset, test_label = load_test_dataset(test_dataset_dir, tokenizer, sen_preprocessor, entity_preprocessor)
-    Re_test_dataset = RE_Dataset(test_dataset, test_label) if args.r_roberta else r_RE_Dataset(test_dataset, test_label, tokenizer)           
+    Re_test_dataset = RE_Dataset(test_dataset, test_label) if not args.r_roberta else r_RE_Dataset(test_dataset, test_label, tokenizer)           
             
 
     if args.k_fold:
@@ -195,9 +197,9 @@ def main(args):
         output_prob = np.mean(output_prob,axis=0).tolist()
     
     else:
-        model = AutoModelForSequenceClassification.from_pretrained(model_dir)
-
-        if args.r_roberta :
+        if not args.r_roberta :
+            model = AutoModelForSequenceClassification.from_pretrained(model_dir)
+        else :
             model_config = AutoConfig.from_pretrained(args.PLM)
             model_config.update({'output_hidden_states': True})  ## r_robert
             model = r_roberta(args.PLM, config=model_config)

@@ -204,8 +204,11 @@ class EntityPreprocessor :
         self.entity_flag = entity_flag
 
     def __call__(self, dataset) :
-        if self.entity_flag == True :
+        if self.entity_flag == 1 :
             sen_preprocessed = self.preprocess(dataset)
+            dataset.sentence = sen_preprocessed
+        if self.entity_flag == 2 :
+            sen_preprocessed = self.single_preprocess(dataset)
             dataset.sentence = sen_preprocessed
         return dataset
 
@@ -215,7 +218,7 @@ class EntityPreprocessor :
             row = data.iloc[idx]
             sentence, subject_entity, object_entity = row['sentence'], row['subject_entity'], row['object_entity']
             sub_start_idx, sub_end_idx, sub_type = subject_entity['start_idx'], subject_entity['end_idx'], subject_entity['type']
-            ob_start_idx, ob_end_idx, ob_type = object_entity[ 'start_idx'], object_entity['end_idx'], object_entity['type']
+            ob_start_idx, ob_end_idx, ob_type = object_entity['start_idx'], object_entity['end_idx'], object_entity['type']
 
             if sub_start_idx < ob_start_idx:
                 sentence = sentence[:sub_start_idx] + ' @ ◈ ' + sub_type + ' ◈ ' + sentence[sub_start_idx:sub_end_idx+1] + ' @ ' + \
@@ -228,6 +231,28 @@ class EntityPreprocessor :
                 
             sentence = re.sub('\s+', " ", sentence)
             new_sentence.append(sentence)
+        
+        print("Finish type entity processing!!!")
+        return new_sentence
+    
+    def single_preprocess(self, data) :
+        new_sentence = []
+        for idx in tqdm(range(len(data))):
+            row = data.iloc[idx]
+            sentence, subject_entity, object_entity = row['sentence'], row['subject_entity'], row['object_entity']
+            sub_start_idx, sub_end_idx, sub_type = subject_entity['start_idx'], subject_entity['end_idx'], subject_entity['type']
+            ob_start_idx, ob_end_idx, ob_type = object_entity[ 'start_idx'], object_entity['end_idx'], object_entity['type']
+
+            if sub_start_idx < ob_start_idx:
+                sentence = sentence[:sub_start_idx] + ' ◈ ' + sentence[sub_start_idx:sub_end_idx+1] + ' ◈ ' + \
+                    sentence[sub_end_idx+1:ob_start_idx] + ' ↑ ' + sentence[ob_start_idx:ob_end_idx+1] + ' ↑ ' + sentence[ob_end_idx+1:]
+            else:
+                sentence = sentence[:ob_start_idx] + ' ↑ ' + sentence[ob_start_idx:ob_end_idx+1] + ' ↑ ' + \
+                    sentence[ob_end_idx +1:sub_start_idx] + ' ◈ ' + sentence[sub_start_idx:sub_end_idx+1] + ' ◈ ' + sentence[sub_end_idx+1:]
+                
+            sentence = re.sub('\s+', " ", sentence)
+            new_sentence.append(sentence)
 
         print("Finish type entity processing!!!")
         return new_sentence
+

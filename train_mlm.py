@@ -39,7 +39,7 @@ def train(args):
         # preprocessing
         train_dataset = preprocessing_dataset(train_dataset, sen_preprocessor, entity_preprocessor)
         # tokenizing dataset
-        tokenized_train = tokenized_dataset(train_dataset, tokenizer)
+        tokenized_train = tokenized_dataset(train_dataset, tokenizer, is_mlm=True)
     else:
         train_dataset = load_mlm_data("/opt/ml/dataset/train/train.csv")
         # tokenizing dataset

@@ -1,4 +1,6 @@
-def tokenized_dataset(dataset, tokenizer, is_inference=False):
+from transformers.file_utils import PaddingStrategy
+
+def tokenized_dataset(dataset, tokenizer, is_inference=False, is_mlm=False):
     """ tokenizer에 따라 sentence를 tokenizing 합니다."""
     concat_entity = []
     
@@ -33,8 +35,8 @@ def tokenized_dataset(dataset, tokenizer, is_inference=False):
             tokenized_sentences = tokenizer(
                 concat_entity,
                 list(dataset['sentence']),
-                # return_tensors="pt",
-                # padding=True,
+                return_tensors="pt",
+                padding=True if is_mlm else PaddingStrategy.DO_NOT_PAD.value,
                 truncation=True,
                 max_length=256,
                 add_special_tokens=True,
@@ -44,8 +46,8 @@ def tokenized_dataset(dataset, tokenizer, is_inference=False):
             tokenized_sentences = tokenizer(
                 concat_entity,
                 list(dataset['sentence']),
-                # return_tensors="pt",
-                # padding=True,
+                return_tensors="pt",
+                padding=True if is_mlm else PaddingStrategy.DO_NOT_PAD.value,
                 truncation=True,
                 max_length=256,
                 add_special_tokens=True

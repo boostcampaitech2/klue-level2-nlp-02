@@ -248,7 +248,7 @@ if __name__ == '__main__':
                         help='model save at save_dir/PLM-wandb_unique_tag')
     parser.add_argument('--PLM', type=str, default='klue/bert-base',
                         help='model type (default: klue/bert-base)')
-    parser.add_argument('--MLM_checkpoint', type=str, default='./best_models/klue-roberta-large-pem-mlm',
+    parser.add_argument('--MLM_checkpoint', type=str, default='./best_models/klue-roberta-large-rtt-pem-mlm',
                         help='MaskedLM pretrained model path')
     parser.add_argument('--use_mlm', default=False, action='store_true',
                         help='whether or not use MaskedLM pretrained model')

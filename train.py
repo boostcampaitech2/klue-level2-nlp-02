@@ -16,6 +16,7 @@ import wandb
 from dotenv import load_dotenv
 from augmentation import *
 from tokenization import tokenized_dataset
+import wandb_setting
 
 def klue_re_micro_f1(preds, labels):
     """KLUE-RE micro f1 (except no_relation)"""
@@ -312,5 +313,20 @@ if __name__ == '__main__':
     # Start
     seed_everything(args.seed)
 
+    sweep_id = wandb.sweep(wandb_setting.sweep_config, project="pytorch-sweeps-demo")
+    def wandb_start(config = None):
+        with wandb.init(config = config):
+            config = wandb.config
+            args.entity_flag = config.entity_flag
+            args.preprocessing_cmb = config.preprocessing_cmb
+            args.mecab_flag = config.mecab_flag
+            args.aeda_flag = config.aeda_flag
+            args.augmentation_flag = config.augmentation_flag
+            args.lr = config.lr
+            args.train_batch_size = config.train_batch_size
+            train(args)
+    
+    wandb.agent(sweep_id, wandb_start, count=300)
+
     # main(args)
-    train(args)
+    # train(args)

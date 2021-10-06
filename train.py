@@ -6,7 +6,7 @@ import sklearn
 import numpy as np
 from sklearn.model_selection import train_test_split, StratifiedKFold
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
-from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer, DataCollatorWithPadding
+from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer, DataCollatorWithPadding, EarlyStoppingCallback
 from load_data import *
 from Preprocessing.preprocessor import EntityPreprocessor, SenPreprocessor, UnkPreprocessor
 import argparse
@@ -306,6 +306,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--augmentation_flag', type=bool, default=False,
                         help="data augmentation by resampling")
+
     
     args = parser.parse_args()
 

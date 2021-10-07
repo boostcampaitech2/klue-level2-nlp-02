@@ -215,7 +215,7 @@ def main(args):
 
     sub_name = model_dir.split('/')[-1]
     # 최종적으로 완성된 예측한 라벨 csv 파일 형태로 저장.
-    output.to_csv(f"./prediction/submission_{sub_name}_2.csv", index=False)
+    output.to_csv(f"./prediction/submission_{sub_name}.csv", index=False)
     #### 필수!! ##############################################
     print('---- Finish! ----')
 

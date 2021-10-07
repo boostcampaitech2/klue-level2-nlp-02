@@ -60,8 +60,7 @@ def inference_ensemble(model_dir, tokenized_sent, device, args, is_roberta=False
     dirs = os.listdir(model_dir)
     dirs = sorted(dirs)
     
-    final_output_prob=[]
-    final_output_pred=[]
+    final_output_prob, final_output_pred = [], []
     for i in range(len(dirs)):
         model_d = os.path.abspath(os.path.join(model_dir, dirs[i]))
         if args.model_name is not None :
@@ -115,9 +114,6 @@ def inference_ensemble(model_dir, tokenized_sent, device, args, is_roberta=False
         final_output_prob.append(np.concatenate(fold_prob, axis=0).tolist())
         
     return final_output_pred, final_output_prob
-
-pers_id_index = {0:4,1:6,2:8,3:10,4:11,5:12,6:13,7:14,8:15,9:16,10:17,11:21,12:23,13:24,14:25,15:26,16:27,17:29}
-orgs_id_index = {0:1,1:2,2:3,3:5,4:7,5:9,6:18,7:19,8:20,9:22,10:28}
 
 pers_id_index = {0:4,1:6,2:8,3:10,4:11,5:12,6:13,7:14,8:15,9:16,10:17,11:21,12:23,13:24,14:25,15:26,16:27,17:29}
 orgs_id_index = {0:1,1:2,2:3,3:5,4:7,5:9,6:18,7:19,8:20,9:22,10:28}

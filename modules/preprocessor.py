@@ -22,6 +22,7 @@ class SenPreprocessor :
             self.mecab = Mecab()
         
     def __call__(self, sentence) :
+        """ argument에 따라 전처리 적용 """
         if self.preprocessing_cmb != None :
             if '0' in self.preprocessing_cmb :
                 sentence = self.remove_special_char(sentence)
@@ -121,7 +122,10 @@ class UnkPreprocessor :
         print('added_token_num:', added_token_num)
         return self.tokenizer, added_token_num
 
-    def UNK_word_and_chr(self, text:str) -> Tuple[List[str], List[str]]: ## UNK subword 찾기
+    def UNK_word_and_chr(self, text:str) -> Tuple[List[str], List[str]]:
+        """
+        정규식을 이용하여 문장기호 띄어쓰기 및 split을 이용한UNK subword 찾기
+        """
         sub_word_UNK_list = []
         def add_space(match) :
             bracket = match.group()
@@ -142,8 +146,9 @@ class UnkPreprocessor :
                     break
         return sub_word_UNK_list
 
-    ## subword # 제거용
+    
     def subword_parsing(self, wordpiece:List) -> List[str]: 
+        """subword # 제거용"""
         Known_char = []
         for subword in wordpiece :
             if subword == self.tokenizer.unk_token :

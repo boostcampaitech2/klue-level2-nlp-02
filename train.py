@@ -67,11 +67,9 @@ def klue_re_micro_f1(preds, labels, model_type):
 
 def klue_re_auprc(probs, labels, model_type):
     """KLUE-RE AUPRC (with no_relation)"""
-
     k=num_label_list[model_type]
-    
-    labels = np.eye(k)[labels]
 
+    labels = np.eye(k)[labels]
     score = np.zeros((k,))
     for c in range(k):
         targets_c = labels.take([c], axis=1).ravel()
@@ -339,78 +337,79 @@ if __name__ == '__main__':
 
     # Data and model checkpoints directories
     parser.add_argument('--save_dir', default='./best_models',
-                        help='model save at save_dir/PLM-wandb_unique_tag')
+                    help='model save at save_dir/PLM-wandb_unique_tag')
     parser.add_argument('--PLM', type=str, default='klue/bert-base',
-                        help='model type (default: klue/bert-base)')
+                    help='model type (default: klue/bert-base)')
     parser.add_argument('--MLM_checkpoint', type=str, default='./best_models/klue-roberta-large-rtt-pem-mlm',
-                        help='MaskedLM pretrained model path')
+                    help='MaskedLM pretrained model path')
     parser.add_argument('--use_mlm', default=False, action='store_true',
-                        help='whether or not use MaskedLM pretrained model')
+                    help='whether or not use MaskedLM pretrained model')
     parser.add_argument('--epochs', type=int, default=3,
-                        help='number of epochs to train (default: 3)')
+                    help='number of epochs to train (default: 3)')
     parser.add_argument('--lr', type=float, default=5e-5,
-                        help='learning rate (default: 5e-5)')
-    parser.add_argument('--train_batch_size', type=int,
-                        default=16, help='train batch size (default: 16)')
+                    help='learning rate (default: 5e-5)')
+    parser.add_argument('--train_batch_size', type=int, default=16,
+                    help='train batch size (default: 16)')
     parser.add_argument('--warmup_steps', type=int, default=500,
-                        help='number of warmup steps for learning rate scheduler (default: 500)')
+                    help='number of warmup steps for learning rate scheduler (default: 500)')
     parser.add_argument('--weight_decay', type=float, default=0.01,
-                        help='strength of weight decay (default: 0.01)')
+                    help='strength of weight decay (default: 0.01)')
     parser.add_argument('--evaluation_strategy', type=str, default='steps',
-                        help='evaluation strategy to adopt during training, steps or epoch (default: steps)')
+                    help='evaluation strategy to adopt during training, steps or epoch (default: steps)')
     parser.add_argument('--ignore_mismatched', type=bool, default=False,
-                        help='ignore mismatched size when load pretrained model')
+                    help='ignore mismatched size when load pretrained model')
 
     # Validation
     parser.add_argument('--eval_flag', default=False, action='store_true',
-                        help='eval flag (default: False)')
+                    help='eval flag (default: False)')
     parser.add_argument('--eval_ratio', type=float, default=0.2,
-                        help='eval data size ratio (default: 0.2)')
-    parser.add_argument('--eval_batch_size', type=int,
-                        default=16, help='eval batch size (default: 16)')
+                    help='eval data size ratio (default: 0.2)')
+    parser.add_argument('--eval_batch_size', type=int, default=16,
+                    help='eval batch size (default: 16)')
 
     # Seed
     parser.add_argument('--seed', type=int, default=2,
-                        help='random seed (default: 2)')
+                    help='random seed (default: 2)')
 
     # Wandb
     parser.add_argument('--dotenv_path', default='/opt/ml/wandb.env',
-                        help='input your dotenv path')
+                    help='input your dotenv path')
     parser.add_argument('--wandb_unique_tag', default='bert-base-high-lr',
-                        help='input your wandb unique tag (default: bert-base-high-lr)')
+                    help='input your wandb unique tag (default: bert-base-high-lr)')
 
     # Running mode
     parser.add_argument('--entity_flag', default=False, action='store_true',
-                        help='add Entity flag (default: False)')
+                    help='add Entity flag (default: False)')
     
     parser.add_argument('--preprocessing_cmb', nargs='+',
-                        help='<Required> Set flag (example: 0 1 2)')
+                    help='<Required> Set flag (example: 0 1 2)')
 
     parser.add_argument('--mecab_flag', default=False, action='store_true',
-                        help='input text pre-processing (default: False)')
+                    help='input text pre-processing (default: False)')
     
     parser.add_argument('--add_unk_token', default=False, action='store_true',
-                        help='add unknown token in vocab (default: False)')
+                    help='add unknown token in vocab (default: False)')
     
     parser.add_argument("--k_fold", type=int, default=0,
-                        help='not k fold(defalut: 0)')
+                    help='not k fold(defalut: 0)')
 
     parser.add_argument('--aeda_flag', default=False, action='store_true',
-                        help='Number of adea agmentations (default: 0)')
+                    help='Number of adea agmentations (default: 0)')
 
     parser.add_argument('--augmentation_flag', default=False, action='store_true',
-                        help="data augmentation by resampling")
+                    help="data augmentation by resampling")
     
     parser.add_argument('--use_rtt', default=False, action='store_true',
                     help='whether or not use rtt augmented dataset')
     
     ## 주의사항 ##
     ## model_type 사용 시, wandb_unique_tag는 use_prepro_entity_mecab_orgsort, use_prepro_entity_mecab_persort 등으로 끝부분 제외하고 통일시켜주시면 감사합니다!
-    parser.add_argument("--model_type", type=str, default='default', help='criterion type: big_sort, per_sort, org_sort')
+    parser.add_argument("--model_type", type=str, default='default',
+                    help='criterion type: big_sort, per_sort, org_sort')
     
     parser.add_argument('--model_name', type=str, default=None,
-                        help='if want, you have to enter your model class name (ConcatFourClsModel, AddFourClassifierRoberta, AddLayerNorm, Rroberta)')
-        
+                    help='if want, you have to enter your model class name (ConcatFourClsModel, AddFourClassifierRoberta, AddLayerNorm, Rroberta)')
+
     args = parser.parse_args()
 
     # Start

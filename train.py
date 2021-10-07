@@ -4,20 +4,21 @@ import pandas as pd
 import torch
 import sklearn
 import numpy as np
-from sklearn.model_selection import train_test_split, StratifiedKFold
-from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
+from sklearn.metrics import accuracy_score
 from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer, DataCollatorWithPadding
 from load_data import *
-from Preprocessing.preprocessor import EntityPreprocessor, SenPreprocessor, UnkPreprocessor
+from modules.preprocessor import EntityPreprocessor, SenPreprocessor, UnkPreprocessor
 import argparse
 from pathlib import Path
 import random
-from loss import use_criterion
+
 import wandb
 from dotenv import load_dotenv
-from augmentation import *
-from tokenization import tokenized_dataset
 import importlib
+from modules.augmentation import *
+from modules.loss import use_criterion
+from tokenization import *
+
 
 dictionary_big_sort = {'no_relation':0, "per":1, "org":2}
 dictionary_per_sort = {'per:title': 0, 'per:employee_of': 1,  'per:product': 2, 
@@ -31,7 +32,7 @@ dictionary_org_sort = {'org:top_members/employees': 0, 'org:members': 1, 'org:pr
                        'org:alternate_names': 3, 'org:place_of_headquarters': 4, 'org:number_of_employees/members': 5, 'org:founded': 6,
                        'org:political/religious_affiliation': 7, 'org:member_of': 8, 'org:dissolved': 9, 'org:founded_by': 10}
 
-def klue_re_micro_f1(preds, labels):
+def klue_re_micro_f1(preds, labels, model_type):
     """KLUE-RE micro f1 (except no_relation)"""
     label_list = ['no_relation', 'org:top_members/employees', 'org:members',
                   'org:product', 'per:title', 'org:alternate_names',
@@ -107,7 +108,7 @@ def compute_metrics(pred):
     }
 
 
-def label_to_num(label, model_type="defalut"):
+def label_to_num(label, model_type="default"):
     num_label = []
     with open('dict_label_to_num.pkl', 'rb') as f:
         dict_label_to_num = pickle.load(f)
@@ -143,6 +144,7 @@ class MultilabelTrainer(Trainer):
 
 
 def train(args):
+    #import pdb;pdb.set_trace()
     # load model and tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.PLM)
 
@@ -152,11 +154,14 @@ def train(args):
     # Preprocessor
     sen_preprocessor = SenPreprocessor(args.preprocessing_cmb, args.mecab_flag)
     unk_preprocessor = UnkPreprocessor(tokenizer)
-    entity_preprocessor = EntityPreprocessor(args.entity_flag)
+    entity_preprocessor = EntityPreprocessor(args.entity_flag if args.model_name != 'Rroberta' else True)
 
     # load dataset
-    datasets = load_data("/opt/ml/dataset/train/train_rtt.csv", args.k_fold, args.eval_ratio)
-    
+    if not args.use_rtt :
+        datasets = load_data("/opt/ml/dataset/train/train.csv", args.k_fold, val_ratio=args.eval_ratio if args.eval_flag else 0, train=True)
+    else :
+        datasets = load_data("/opt/ml/dataset/train/train_rtt.csv", args.k_fold, val_ratio=args.eval_ratio if args.eval_flag else 0, train=True)
+
     for fold_idx, (train_dataset, test_dataset) in enumerate(datasets):
         
         #agumentation and preprocessing
@@ -170,28 +175,30 @@ def train(args):
         #concatenate augmentation data and train data
         train_dataset = pd.concat([train_dataset, aug_data_by_mixing_entity, aug_data_by_aeda])
 
-        #shuffle rows
-        train_dataset = train_dataset.sample(frac=1,random_state=args.seed).reset_index(drop=True)
-
-        train_label = label_to_num(train_dataset['label'].values)
-        tokenized_train = tokenized_dataset(train_dataset, tokenizer)
-        RE_train_dataset = RE_Dataset(tokenized_train, train_label)
-
-        #eval set이 없으면 RE_dev_dataset에 RE_train_dataset 복사하여 사용
-        if test_dataset is not None:
-            test_dataset = preprocessing_dataset(test_dataset, sen_preprocessor, entity_preprocessor)
-            test_label = label_to_num(test_dataset['label'].values)
-            tokenized_test = tokenized_dataset(test_dataset, tokenizer)
-            RE_dev_dataset = RE_Dataset(tokenized_test, test_label)
-        else:
-            RE_dev_dataset = RE_train_dataset
-        
         added_token_num = 0
         if args.add_unk_token :
             tokenizer, added_token_num =  unk_preprocessor(list(train_dataset['sentence']),
                                                            list(train_dataset['subject_entity']),
                                                            list(train_dataset['object_entity']),
                                                            )
+        #shuffle rows
+        train_dataset = train_dataset.sample(frac=1,random_state=args.seed).reset_index(drop=True)
+        
+        train_label = label_to_num(train_dataset['label'].values, args.model_type)
+        tokenized_train = tokenized_dataset(train_dataset, tokenizer)
+        RE_train_dataset = RE_Dataset(tokenized_train, train_label) if args.model_name != 'Rroberta' else r_RE_Dataset(tokenized_train, train_label, tokenizer)
+
+
+        #eval set이 없으면 RE_dev_dataset에 RE_train_dataset 복사하여 사용
+        if test_dataset is not None:
+            test_dataset = preprocessing_dataset(test_dataset, sen_preprocessor, entity_preprocessor)
+            test_label = label_to_num(test_dataset['label'].values, args.model_type)
+
+            tokenized_test = tokenized_dataset(test_dataset, tokenizer)
+            RE_dev_dataset = RE_Dataset(tokenized_test, test_label) if args.model_name != 'Rroberta' else r_RE_Dataset(tokenized_test, test_label, tokenizer)
+        else:
+            RE_dev_dataset = RE_train_dataset
+        
         #wandb
         load_dotenv(dotenv_path=args.dotenv_path)
         WANDB_AUTH_KEY = os.getenv('WANDB_AUTH_KEY')
@@ -205,7 +212,7 @@ def train(args):
         wandb.config.update(args)
 
         train_model(args, RE_train_dataset, RE_dev_dataset, fold_idx=fold_idx, dynamic_padding=dynamic_padding,
-                     tokenizer=tokenizer, added_token_num=added_token_num, model_type=args.model_type)
+                    tokenizer=tokenizer, added_token_num=added_token_num, model_type=args.model_type)
 
         wandb.finish()
 
@@ -251,7 +258,8 @@ def train_model(
         
     elif args.model_name is not None:
         model = MyModel(args.PLM, config=model_config)
-        
+    elif args.model_name is not None and args.use_mlm  : 
+        model = MyModel(args.MLM_checkpoint, config=model_config)       
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
             args.PLM, ignore_mismatched_sizes=args.ignore_mismatched, config=model_config)
@@ -290,7 +298,7 @@ def train_model(
         train_dataset=RE_train_dataset,         # training dataset
         eval_dataset=RE_dev_dataset if args.eval_flag else None, # evaluation dataset
         compute_metrics=compute_metrics,         # define metrics function
-        data_collator=dynamic_padding,
+        data_collator=dynamic_padding if args.model_name == 'Rroberta' else None,
         tokenizer=tokenizer)
 
 
@@ -388,8 +396,8 @@ if __name__ == '__main__':
                         help='random seed (default: 2)')
 
     # Wandb
-    parser.add_argument(
-        '--dotenv_path', default='/opt/ml/wandb.env', help='input your dotenv path')
+    parser.add_argument('--dotenv_path', default='/opt/ml/wandb.env',
+                        help='input your dotenv path')
     parser.add_argument('--wandb_unique_tag', default='bert-base-high-lr',
                         help='input your wandb unique tag (default: bert-base-high-lr)')
 
@@ -409,19 +417,22 @@ if __name__ == '__main__':
     parser.add_argument("--k_fold", type=int, default=0,
                         help='not k fold(defalut: 0)')
 
-    parser.add_argument('--aeda_flag', type=bool, default=False,
+    parser.add_argument('--aeda_flag', default=False, action='store_true',
                         help='Number of adea agmentations (default: 0)')
 
-    parser.add_argument('--augmentation_flag', type=bool, default=False,
+    parser.add_argument('--augmentation_flag', default=False, action='store_true',
                         help="data augmentation by resampling")
+    
+    parser.add_argument('--use_rtt', default=False, action='store_true',
+                    help='whether or not use rtt augmented dataset')
     
     ## 주의사항 ##
     ## model_type 사용 시, wandb_unique_tag는 use_prepro_entity_mecab_orgsort, use_prepro_entity_mecab_persort 등으로 끝부분 제외하고 통일시켜주시면 감사합니다!
     parser.add_argument("--model_type", type=str, default='default', help='criterion type: big_sort, per_sort, org_sort')
     
     parser.add_argument('--model_name', type=str, default=None,
-                        help='if want, you have to enter your model class name')
-    
+                        help='if want, you have to enter your model class name (ConcatFourClsModel, AddFourClassifierRoberta, AddLayerNorm, Rroberta)')
+        
     args = parser.parse_args()
 
     # Start

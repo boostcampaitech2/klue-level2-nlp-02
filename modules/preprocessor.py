@@ -1,12 +1,9 @@
-import pandas as pd
-
 import re
 from itertools import chain
 from collections import Counter
 from typing import Dict, List, Tuple
 
 from tqdm import tqdm
-from transformers import AutoTokenizer
 from konlpy.tag import Mecab
 
 # Sentence Preprocessor
@@ -147,14 +144,14 @@ class UnkPreprocessor :
         print('-'*100)
         print('before add unk, tokenizer count:', len(self.tokenizer.vocab.keys()))
         print('sentence unknown token searching...')
-        UNK_sentence_list = chain(*[self.UNK_word_and_chr(self.tokenizer, s) for s in tqdm(sent)])
+        UNK_sentence_list = chain(*[self.UNK_word_and_chr(s) for s in tqdm(sent)])
 
         # for_add = [token for token, cnt in Counter(UNK_sentence_list).items() if cnt >= 10]
         for_add = [token for token, cnt in Counter(UNK_sentence_list).items()]
         print(for_add[:20])
 
         print('entity unknown token searching...')
-        UNK_entity_list = chain(*[self.UNK_word_and_chr(self.tokenizer, w) for w in tqdm(sub+obj)])
+        UNK_entity_list = chain(*[self.UNK_word_and_chr(w) for w in tqdm(sub+obj)])
         # for_add += [token for token, cnt in Counter(UNK_entity_list).items() if cnt >= 2]
         for_add += [token for token, cnt in Counter(UNK_entity_list).items()]
         print('add unk example:', for_add[:20])
@@ -177,7 +174,7 @@ class UnkPreprocessor :
         words_list = p.sub(add_space, text).split()
         for word in words_list :
             subwordpieces_ID_encoded = self.tokenizer.tokenize(word)
-            Known_subword = self.subword_parsing(self.tokenizer, subwordpieces_ID_encoded)
+            Known_subword = self.subword_parsing(subwordpieces_ID_encoded)
         
             for sub_char, NK_char in zip(word, Known_subword) :
                 if sub_char != NK_char and len(word) == len(Known_subword) :
@@ -204,7 +201,7 @@ class EntityPreprocessor :
         self.entity_flag = entity_flag
 
     def __call__(self, dataset) :
-        if self.entity_flag == True :
+        if self.entity_flag :
             sen_preprocessed = self.preprocess(dataset)
             dataset.sentence = sen_preprocessed
         return dataset
@@ -215,7 +212,7 @@ class EntityPreprocessor :
             row = data.iloc[idx]
             sentence, subject_entity, object_entity = row['sentence'], row['subject_entity'], row['object_entity']
             sub_start_idx, sub_end_idx, sub_type = subject_entity['start_idx'], subject_entity['end_idx'], subject_entity['type']
-            ob_start_idx, ob_end_idx, ob_type = object_entity[ 'start_idx'], object_entity['end_idx'], object_entity['type']
+            ob_start_idx, ob_end_idx, ob_type = object_entity['start_idx'], object_entity['end_idx'], object_entity['type']
 
             if sub_start_idx < ob_start_idx:
                 sentence = sentence[:sub_start_idx] + ' @ ◈ ' + sub_type + ' ◈ ' + sentence[sub_start_idx:sub_end_idx+1] + ' @ ' + \
@@ -228,9 +225,7 @@ class EntityPreprocessor :
                 
             sentence = re.sub('\s+', " ", sentence)
             new_sentence.append(sentence)
-
+        
         print("Finish type entity processing!!!")
         return new_sentence
-
-
 

@@ -1,20 +1,15 @@
-import pickle as pickle
 import pandas as pd
 import collections
 import random
 import torch
-from torch.utils.data import Dataset, Subset
+from torch.utils.data import Dataset
 from sklearn.model_selection import StratifiedKFold
 
 class RE_Dataset(Dataset):
     """ Dataset 구성을 위한 class."""
-    def __init__(self, dataset, labels,
-                #  val_ratio=0.2, seed=2
-                 ):
-        # random.seed(seed)
+    def __init__(self, dataset, labels):
         self.dataset = dataset
         self.labels = labels
-        # self.val_ratio = val_ratio
 
     def __getitem__(self, idx):
         item = {key: val[idx] for key, val in self.dataset.items()} #id,sentence, subject_entity,object_entity,label
@@ -24,6 +19,38 @@ class RE_Dataset(Dataset):
     def __len__(self):
         return len(self.labels)
 
+class r_RE_Dataset(RE_Dataset) :
+    def __init__(self, pair_dataset, labels, tokenizer):
+        self.pair_dataset = pair_dataset
+        self.labels = labels
+
+        self.sub_id = tokenizer.get_vocab()['◈']
+        self.obj_id = tokenizer.get_vocab()['↑']
+
+    def __getitem__(self, idx):
+        item = {key: val[idx] for key, val in self.pair_dataset.items()}
+        item['labels'] = torch.tensor(self.labels[idx])
+
+        sub_flag, obj_flag = 0, 0
+        e1_mask, e2_mask = [], []
+        for enc in item['input_ids'] :
+            if enc == self.sub_id :
+                sub_flag += 1
+                e1_mask.append(0)
+                e2_mask.append(0)
+                continue
+            elif enc == self.obj_id :
+                obj_flag += 1
+                e1_mask.append(0)
+                e2_mask.append(0)
+                continue
+            if sub_flag == 1 : e1_mask.append(1)
+            else : e1_mask.append(0)
+            if obj_flag == 1 : e2_mask.append(1)
+            else : e2_mask.append(0)
+        item["e1_mask"] = torch.tensor(e1_mask)
+        item["e2_mask"] = torch.tensor(e2_mask)
+        return item
 
 def preprocessing_dataset(dataset, sen_preprocessor, entity_preprocessor):
     """ 처음 불러온 csv 파일을 원하는 형태의 DataFrame으로 변경 시켜줍니다."""

@@ -7,7 +7,7 @@ from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_sc
 from transformers import AutoTokenizer, AutoConfig, AutoModelForMaskedLM, Trainer, TrainingArguments, DataCollatorWithPadding
 from load_data import *
 from Preprocessing.preprocessor import EntityPreprocessor, SenPreprocessor, UnkPreprocessor
-from tokenization import tokenized_dataset, tokenized_mlm_dataset
+from tokenization import tokenized_dataset
 from torch.utils.data.dataset import random_split
 
 import argparse
@@ -42,8 +42,6 @@ def train(args):
         tokenized_train = tokenized_dataset(train_dataset, tokenizer, is_mlm=True)
     else:
         train_dataset = load_mlm_data("/opt/ml/dataset/train/train.csv")
-        # tokenizing dataset
-        tokenized_train = tokenized_mlm_dataset(train_dataset, tokenizer)
     
     MLM_train_dataset = MLM_Dataset(
         tokenized_train, tokenizer)

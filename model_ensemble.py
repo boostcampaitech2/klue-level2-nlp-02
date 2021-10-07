@@ -38,8 +38,8 @@ def select_csv(base_path):
     return csv_lists
 
 def ensemble(args):
-    if args.dir == 'all':
-        csv_files = glob(f"./prediction/all/*.csv")
+    if args.all_flag:
+        csv_files = glob(f"./prediction/{args.dir}/*.csv")
         for index, csv_name in enumerate(csv_files, 1):
             print("{:02d}_dir is: {}".format(index, os.path.basename(csv_name)))
     else:
@@ -65,6 +65,7 @@ def ensemble(args):
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dir', default='all', help='dir type(default: all)')
+    parser.add_argument('--all_flag', default=False, action='store_true', help='whether or not load all csv files(default: False)')
     args = parser.parse_args()
 
     ensemble(args)

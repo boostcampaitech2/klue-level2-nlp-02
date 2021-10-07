@@ -55,6 +55,7 @@ def tokenized_dataset(dataset, tokenizer, is_inference=False, is_mlm=False):
 
     return tokenized_sentences
 
+
 def tokenized_mlm_dataset(dataset, tokenizer, is_inference=False):
     """ tokenizer에 따라 sentence를 tokenizing 합니다."""
     if is_inference:
@@ -99,4 +100,5 @@ def tokenized_mlm_dataset(dataset, tokenizer, is_inference=False):
                 max_length=256,
                 add_special_tokens=True
             )
-    return tokenized_sentences 
+
+    return tokenized_sentences

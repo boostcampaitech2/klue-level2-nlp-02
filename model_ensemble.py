@@ -27,7 +27,6 @@ def select_csv(base_path):
         dirs[i] = os.path.basename(d)
         print("(%d) %s" % (i, dirs[i]))
     idx_list = input("Select csv files you want to ensemble: ").split()
-
     csv_lists = []
     for index, file_idx in enumerate(idx_list, 1):
         csv_file = os.path.abspath(

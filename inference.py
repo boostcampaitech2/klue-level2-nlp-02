@@ -23,7 +23,7 @@ def inference(model, tokenized_sent, device, is_roberta=False):
     model.eval()
     output_pred = []
     output_prob = []
-    for i, data in enumerate(tqdm(dataloader)):
+    for data in tqdm(dataloader):
         with torch.no_grad():
             if is_roberta:
                 outputs = model(

@@ -234,8 +234,8 @@ if __name__ == '__main__':
     parser.add_argument('--model_dir', type=str, default="./best_models")
     parser.add_argument(
         '--PLM', type=str, help='model type (example: klue/bert-base)', required=True)
-    parser.add_argument(
-        '--entity_flag', default=False, action='store_true', help='Train에 사용했던거랑 똑같이 (default: False)')
+    parser.add_argument('--entity_flag', type=int, default=0,
+                        help='1: original 2: single (default: 0)')
     # parser.add_argument(
     #     '--preprocessing_flag', default=False, action='store_true', help='Train에 사용했던거랑 똑같이 (default: False)')
     parser.add_argument(

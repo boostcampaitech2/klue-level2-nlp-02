@@ -163,4 +163,4 @@ def change_entity(row):
             "label" : row["label"],
             "source" : row["source"],
             "sbj_obj_entity_type" : row["sbj_obj_entity_type"],
-            "sbj_obj_entity_word" : row["sbj_obj_entity_type"]}
+            "sbj_obj_entity_word" : row["sbj_obj_entity_word"]}

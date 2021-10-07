@@ -100,4 +100,5 @@ def tokenized_mlm_dataset(dataset, tokenizer, is_inference=False):
                 max_length=256,
                 add_special_tokens=True
             )
+
     return tokenized_sentences

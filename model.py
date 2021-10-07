@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import transformers
 from transformers import AutoModel, AutoConfig, RobertaPreTrainedModel
-from utils import *
+
 from tqdm import tqdm
 
 
@@ -62,6 +62,7 @@ class ConcatFourClsModel(RobertaPreTrainedModel):
         logits = self.out_proj(logits)  # (batch, hidden_size*4) -> (batch, num_labels)
 
         loss = None
+
 
         if labels is not None:
             if self.config.problem_type is None:

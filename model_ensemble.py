@@ -27,7 +27,6 @@ def select_csv(base_path):
         dirs[i] = os.path.basename(d)
         print("(%d) %s" % (i, dirs[i]))
     idx_list = input("Select csv files you want to ensemble: ").split()
-    
     csv_lists = []
     for index, file_idx in enumerate(idx_list, 1):
         csv_file = os.path.abspath(
@@ -44,14 +43,14 @@ def ensemble(args):
             print("{:02d}_dir is: {}".format(index, os.path.basename(csv_name)))
     else:
         csv_files = select_csv("./prediction")
-    
+
     for i, csv_file in enumerate(csv_files) :
         df = pd.read_csv(csv_file)
         if i == 0:
             probs = pd.DataFrame(df.probs.map(eval).to_list())
         else :
             probs += pd.DataFrame(df.probs.map(eval).to_list())
-    
+
     probs = probs.div(probs.sum(axis=1), axis=0)
     probs_argmax = probs.idxmax(axis=1).values.tolist()
     pred_answer = num_to_label(probs_argmax)

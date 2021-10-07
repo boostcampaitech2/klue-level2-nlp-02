@@ -12,11 +12,24 @@ from Preprocessing.preprocessor import EntityPreprocessor, SenPreprocessor, UnkP
 import argparse
 from pathlib import Path
 import random
+from loss import use_criterion
 import wandb
 from dotenv import load_dotenv
 from augmentation import *
 from tokenization import tokenized_dataset
 import importlib
+
+dictionary_big_sort = {'no_relation':0, "per":1, "org":2}
+dictionary_per_sort = {'per:title': 0, 'per:employee_of': 1,  'per:product': 2, 
+                       'per:children': 3, 'per:place_of_residence': 4, 
+                       'per:alternate_names': 5, 'per:other_family': 6, 'per:colleagues': 7, 
+                       'per:origin': 8, 'per:siblings': 9, 'per:spouse': 10, 
+                       'per:parents': 11,  'per:schools_attended': 12, 
+                       'per:date_of_death': 13, 'per:date_of_birth': 14, 'per:place_of_birth': 15, 
+                       'per:place_of_death': 16,  'per:religion': 17}
+dictionary_org_sort = {'org:top_members/employees': 0, 'org:members': 1, 'org:product': 2,
+                       'org:alternate_names': 3, 'org:place_of_headquarters': 4, 'org:number_of_employees/members': 5, 'org:founded': 6,
+                       'org:political/religious_affiliation': 7, 'org:member_of': 8, 'org:dissolved': 9, 'org:founded_by': 10}
 
 def klue_re_micro_f1(preds, labels):
     """KLUE-RE micro f1 (except no_relation)"""
@@ -31,18 +44,43 @@ def klue_re_micro_f1(preds, labels):
                   'per:schools_attended', 'per:date_of_death', 'per:date_of_birth',
                   'per:place_of_birth', 'per:place_of_death', 'org:founded_by',
                   'per:religion']
-    no_relation_label_idx = label_list.index("no_relation")
-    label_indices = list(range(len(label_list)))
-    label_indices.remove(no_relation_label_idx)
+    
+    if model_type=="big_sort":
+        label_list=list(dictionary_big_sort.keys())
+        no_relation_label_idx = label_list.index("no_relation")
+        label_indices = list(range(len(label_list)))
+        label_indices.remove(no_relation_label_idx)
+        
+    elif model_type=="per_sort":
+        label_list=list(dictionary_per_sort.keys())
+        label_indices = list(range(len(label_list)))
+        
+    elif model_type=="org_sort":
+        label_list=list(dictionary_org_sort.keys())
+        label_indices = list(range(len(label_list)))
+        
+    else:
+        no_relation_label_idx = label_list.index("no_relation")
+        label_indices = list(range(len(label_list)))
+        label_indices.remove(no_relation_label_idx)
+    
     return sklearn.metrics.f1_score(labels, preds, average="micro", labels=label_indices) * 100.0
 
 
-def klue_re_auprc(probs, labels):
+def klue_re_auprc(probs, labels, model_type):
     """KLUE-RE AUPRC (with no_relation)"""
-    labels = np.eye(30)[labels]
+    k=30
+    if model_type=="big_sort":
+        k=3
+    elif model_type=="per_sort":
+        k=18
+    elif model_type=="org_sort":
+        k=11
+    
+    labels = np.eye(k)[labels]
 
-    score = np.zeros((30,))
-    for c in range(30):
+    score = np.zeros((k,))
+    for c in range(k):
         targets_c = labels.take([c], axis=1).ravel()
         preds_c = probs.take([c], axis=1).ravel()
         precision, recall, _ = sklearn.metrics.precision_recall_curve(
@@ -58,8 +96,8 @@ def compute_metrics(pred):
     probs = pred.predictions
 
     # calculate accuracy using sklearn's function
-    f1 = klue_re_micro_f1(preds, labels)
-    auprc = klue_re_auprc(probs, labels)
+    f1 = klue_re_micro_f1(preds, labels, args.model_type)
+    auprc = klue_re_auprc(probs, labels, args.model_type)
     acc = accuracy_score(labels, preds)  # 리더보드 평가에는 포함되지 않습니다.
 
     return {
@@ -69,14 +107,39 @@ def compute_metrics(pred):
     }
 
 
-def label_to_num(label):
+def label_to_num(label, model_type="defalut"):
     num_label = []
     with open('dict_label_to_num.pkl', 'rb') as f:
         dict_label_to_num = pickle.load(f)
     for v in label:
-        num_label.append(dict_label_to_num[v])
+        
+        if model_type=="default":
+            num_label.append(dict_label_to_num[v])
+        
+        elif model_type=="big_sort": # no_relation: 0, per: 1, org: 2
+            if "per" in v:
+                v="per"
+            if "org" in v:
+                v="org"
+            num_label.append(dictionary_big_sort[v])
+        
+        elif model_type=="per_sort":
+            num_label.append(dictionary_per_sort[v])
+            
+        elif model_type=="org_sort":
+            num_label.append(dictionary_org_sort[v])
 
     return num_label
+
+#https://huggingface.co/transformers/main_classes/trainer.html
+class MultilabelTrainer(Trainer):
+    def compute_loss(self, model, inputs, return_outputs=False):
+        labels = inputs.pop("labels")
+        outputs = model(**inputs)
+        logits = outputs.logits
+        loss_fn = use_criterion(args.criterion)
+        loss = loss_fn(logits, labels)
+        return (loss, outputs) if return_outputs else loss
 
 
 def train(args):
@@ -142,11 +205,11 @@ def train(args):
         wandb.config.update(args)
 
         train_model(args, RE_train_dataset, RE_dev_dataset, fold_idx=fold_idx, dynamic_padding=dynamic_padding,
-                     tokenizer=tokenizer, added_token_num=added_token_num)
+                     tokenizer=tokenizer, added_token_num=added_token_num, model_type=args.model_type)
 
         wandb.finish()
-        
-    
+
+
 def train_model(
     args,
     RE_train_dataset,
@@ -154,7 +217,10 @@ def train_model(
     fold_idx,
     dynamic_padding,
     tokenizer,
-    added_token_num):
+    added_token_num,
+    model_type):
+    
+
     # Mymodel로 train을 하면 Mymodel을 불러옵니다.
     MyModel = None
 
@@ -167,16 +233,26 @@ def train_model(
 
     # setting model hyperparameter
     model_config = AutoConfig.from_pretrained(args.PLM)
-    model_config.num_labels = 30
+    if model_type=="big_sort":
+        model_config.num_labels=3
+    elif model_type=="per_sort":
+        model_config.num_labels=18
+    elif model_type=="org_sort":
+        model_config.num_labels=11
+    else:
+        model_config.num_labels = 30
+        
     if MyModel is not None and MyModel.__name__ == 'ConcatFourClsModel':
         model_config.update({'output_hidden_states': True})
 
     if args.use_mlm:
         model = AutoModelForSequenceClassification.from_pretrained(
             args.MLM_checkpoint, config=model_config)
+        
     elif args.model_name is not None:
         model = MyModel(args.PLM, config=model_config)
-    else :  
+        
+    else:
         model = AutoModelForSequenceClassification.from_pretrained(
             args.PLM, ignore_mismatched_sizes=args.ignore_mismatched, config=model_config)
     
@@ -199,7 +275,7 @@ def train_model(
             weight_decay=args.weight_decay,                # strength of weight decay
             logging_dir='./logs',            # directory for storing logs
             logging_steps=100,               # log saving step.
-            evaluation_strategy=args.evaluation_strategy if args.eval_flag else 'no', # evaluation strategy to adopt during training
+            evaluation_strategy=args.evaluation_strategy if args.eval_flag else 'no',
             # `no`: No evaluation during training.
             # `steps`: Evaluate every `eval_steps`.
             # `epoch`: Evaluate every end of epoch.
@@ -222,8 +298,12 @@ def train_model(
     trainer.train()
 
     if args.k_fold:
-        model_save_pth = os.path.join(args.save_dir, args.PLM.replace(
-            '/', '-') + '-' + args.wandb_unique_tag.replace('/', '-') + "/" + str(fold_idx))
+        if model_type!="default":
+            folder_name = re.sub("orgsort|persort|bigsort","",args.wandb_unique_tag)
+            model_save_pth = os.path.join(args.save_dir, args.PLM.replace('/', '-') + '-' + folder_name.replace('/', '-') + "/" + model_type + "_" + str(fold_idx))
+        else:
+            model_save_pth = os.path.join(args.save_dir, args.PLM.replace('/', '-') + '-' + args.wandb_unique_tag.replace('/', '-') + "/" + str(fold_idx))
+            
         os.makedirs(model_save_pth, exist_ok=True)
         if MyModel is not None:
             torch.save(model.state_dict(), os.path.join(
@@ -233,6 +313,16 @@ def train_model(
 
         if args.add_unk_token :
             tokenizer.save_pretrained(model_save_pth+'/tokenizer')
+    
+    elif model_type!="default":
+        folder_name = re.sub("orgsort|persort|bigsort","",args.wandb_unique_tag)
+        model_save_pth = os.path.join(args.save_dir, args.PLM.replace('/', '-') + '-' + folder_name.replace('/', '-') + "/" + model_type)
+        os.makedirs(model_save_pth, exist_ok=True)
+        if MyModel is not None:
+            torch.save(model.state_dict(), os.path.join(
+            model_save_pth, 'pytorch_model.pt'))
+        else :
+            model.save_pretrained(model_save_pth)
     
     else:
         model_save_pth = os.path.join(args.save_dir, args.PLM.replace(
@@ -324,7 +414,11 @@ if __name__ == '__main__':
 
     parser.add_argument('--augmentation_flag', type=bool, default=False,
                         help="data augmentation by resampling")
-
+    
+    ## 주의사항 ##
+    ## model_type 사용 시, wandb_unique_tag는 use_prepro_entity_mecab_orgsort, use_prepro_entity_mecab_persort 등으로 끝부분 제외하고 통일시켜주시면 감사합니다!
+    parser.add_argument("--model_type", type=str, default='default', help='criterion type: big_sort, per_sort, org_sort')
+    
     parser.add_argument('--model_name', type=str, default=None,
                         help='if want, you have to enter your model class name')
     

@@ -145,7 +145,7 @@ def load_mlm_data(dataset_dir):
 def mask_tokens(inputs, tokenizer, mlm_probability=0.15, pad=True):
     inputs = torch.tensor(inputs)
     labels = inputs.clone()
-    
+
     # mlm_probability은 15%로 BERT에서 사용하는 확률
     probability_matrix = torch.full(labels.shape, mlm_probability)
 
@@ -153,11 +153,11 @@ def mask_tokens(inputs, tokenizer, mlm_probability=0.15, pad=True):
         tokenizer.get_special_tokens_mask(labels.tolist(), already_has_special_tokens=True)
     ]
     probability_matrix.masked_fill_(torch.tensor(special_tokens_mask, dtype=torch.bool).squeeze(), value=0.0)
-    
+
     if tokenizer._pad_token is not None:
         padding_mask = labels.eq(tokenizer.pad_token_id)
         probability_matrix.masked_fill_(padding_mask, value=0.0)
-    
+
     masked_indices = torch.bernoulli(probability_matrix).bool()
     labels[~masked_indices] = -100  # We only compute loss on masked tokens
 
@@ -169,4 +169,4 @@ def mask_tokens(inputs, tokenizer, mlm_probability=0.15, pad=True):
     indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).bool() & masked_indices & ~indices_replaced
     random_words = torch.randint(len(tokenizer), labels.shape, dtype=torch.long)
     inputs[indices_random] = random_words[indices_random]
-    return inputs, labels
+    return inputs, labels 

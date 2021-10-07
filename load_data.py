@@ -107,3 +107,66 @@ def split_by_val_ratio(dataset,val_ratio):
     train_dset = dataset.iloc[train_indices]
     val_dset = dataset.iloc[val_indices]
     return [[train_dset, val_dset]]
+
+
+#### for mlm
+class MLM_Dataset(Dataset):
+    """ Masked Language Model Dataset 구성을 위한 class."""
+    def __init__(self, pair_dataset, tokenizer):
+        self.pair_dataset = pair_dataset
+        self.tokenizer = tokenizer
+
+    def __getitem__(self, idx):
+        item = {key: val[idx] for key, val in self.pair_dataset.items()}
+        inputs, labels = mask_tokens(item['input_ids'], self.tokenizer)
+        item['input_ids'] = inputs.squeeze()
+        # item['input_mask'] = inputs != 0
+        item['labels'] = labels.squeeze()
+        return item
+
+    def __len__(self):
+        return len(self.pair_dataset['input_ids'])
+
+
+def load_mlm_data(dataset_dir):
+    """ csv 파일을 경로에 맞게 불러 옵니다. """
+    pd_dataset = pd.read_csv(dataset_dir)
+    if 'train' in dataset_dir:
+        pd_dataset = pd_dataset.drop_duplicates(
+            ['sentence'], keep='first') # 중복되는 문장 제거
+
+    pd_dataset = pd.DataFrame({'id': pd_dataset['id'],
+                                'sentence': pd_dataset['sentence'],
+                                'label': pd_dataset['label'],
+                                })
+    return pd_dataset
+
+
+def mask_tokens(inputs, tokenizer, mlm_probability=0.15, pad=True):
+    inputs = torch.tensor(inputs)
+    labels = inputs.clone()
+    
+    # mlm_probability은 15%로 BERT에서 사용하는 확률
+    probability_matrix = torch.full(labels.shape, mlm_probability)
+
+    special_tokens_mask = [
+        tokenizer.get_special_tokens_mask(labels.tolist(), already_has_special_tokens=True)
+    ]
+    probability_matrix.masked_fill_(torch.tensor(special_tokens_mask, dtype=torch.bool).squeeze(), value=0.0)
+    
+    if tokenizer._pad_token is not None:
+        padding_mask = labels.eq(tokenizer.pad_token_id)
+        probability_matrix.masked_fill_(padding_mask, value=0.0)
+    
+    masked_indices = torch.bernoulli(probability_matrix).bool()
+    labels[~masked_indices] = -100  # We only compute loss on masked tokens
+
+    # 80% of the time, we replace masked input tokens tokenizer.mask_token ([MASK])
+    indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
+    inputs[indices_replaced] = tokenizer.convert_tokens_to_ids(tokenizer.mask_token)
+
+    # 10% of the time, we replace masked input tokens with random word
+    indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).bool() & masked_indices & ~indices_replaced
+    random_words = torch.randint(len(tokenizer), labels.shape, dtype=torch.long)
+    inputs[indices_random] = random_words[indices_random]
+    return inputs, labels

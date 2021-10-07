@@ -658,7 +658,7 @@ def main(args):
 
     # preprocessor
     sen_preprocessor = SenPreprocessor(args.preprocessing_cmb, args.mecab_flag)
-    entity_preprocessor = EntityPreprocessor(args.entity_flag)
+    entity_preprocessor = EntityPreprocessor(args.entity_flag if args.model_name != 'Rroberta' else True)
 
     if args.PLM in ['klue/roberta-base', 'klue/roberta-small', 'klue/roberta-large']:
         is_roberta = True

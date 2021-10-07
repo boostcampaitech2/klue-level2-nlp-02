@@ -16,6 +16,7 @@ import wandb
 from dotenv import load_dotenv
 from augmentation import *
 from tokenization import tokenized_dataset
+import importlib
 
 def klue_re_micro_f1(preds, labels):
     """KLUE-RE micro f1 (except no_relation)"""
@@ -154,19 +155,28 @@ def train_model(
     dynamic_padding,
     tokenizer,
     added_token_num):
-    
+    # Mymodel로 train을 하면 Mymodel을 불러옵니다.
+    MyModel = None
 
+    if args.model_name is not None :
+        mm = importlib.import_module('model')
+        MyModel = getattr(mm, args.model_name)
+    ############################################
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print(device)
 
     # setting model hyperparameter
     model_config = AutoConfig.from_pretrained(args.PLM)
     model_config.num_labels = 30
+    if MyModel is not None and MyModel.__name__ == 'ConcatFourClsModel':
+        model_config.update({'output_hidden_states': True})
 
     if args.use_mlm:
         model = AutoModelForSequenceClassification.from_pretrained(
             args.MLM_checkpoint, config=model_config)
-    else:
+    elif args.model_name is not None:
+        model = MyModel(args.PLM, config=model_config)
+    else :  
         model = AutoModelForSequenceClassification.from_pretrained(
             args.PLM, ignore_mismatched_sizes=args.ignore_mismatched, config=model_config)
     
@@ -215,7 +225,11 @@ def train_model(
         model_save_pth = os.path.join(args.save_dir, args.PLM.replace(
             '/', '-') + '-' + args.wandb_unique_tag.replace('/', '-') + "/" + str(fold_idx))
         os.makedirs(model_save_pth, exist_ok=True)
-        model.save_pretrained(model_save_pth)
+        if MyModel is not None:
+            torch.save(model.state_dict(), os.path.join(
+            model_save_pth, 'pytorch_model.pt'))
+        else :
+            model.save_pretrained(model_save_pth)
 
         if args.add_unk_token :
             tokenizer.save_pretrained(model_save_pth+'/tokenizer')
@@ -224,7 +238,11 @@ def train_model(
         model_save_pth = os.path.join(args.save_dir, args.PLM.replace(
             '/', '-') + '-' + args.wandb_unique_tag.replace('/', '-'))
         os.makedirs(model_save_pth, exist_ok=True)
-        model.save_pretrained(model_save_pth)
+        if MyModel is not None:
+            torch.save(model.state_dict(), os.path.join(
+            model_save_pth, 'pytorch_model.pt'))
+        else :
+            model.save_pretrained(model_save_pth)
         
         if args.add_unk_token :
             tokenizer.save_pretrained(model_save_pth+'/tokenizer')
@@ -306,6 +324,9 @@ if __name__ == '__main__':
 
     parser.add_argument('--augmentation_flag', type=bool, default=False,
                         help="data augmentation by resampling")
+
+    parser.add_argument('--model_name', type=str, default=None,
+                        help='if want, you have to enter your model class name')
     
     args = parser.parse_args()
 

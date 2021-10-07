@@ -12,6 +12,7 @@ import argparse
 import os
 from tqdm import tqdm
 from tokenization import tokenized_dataset
+import importlib
 
 
 def inference(model, tokenized_sent, device, is_roberta=False):
@@ -46,7 +47,7 @@ def inference(model, tokenized_sent, device, is_roberta=False):
 
     return np.concatenate(output_pred).tolist(), np.concatenate(output_prob, axis=0).tolist()
 
-def inference_ensemble(model_dir, tokenized_sent, device, is_roberta=False):
+def inference_ensemble(model_dir, tokenized_sent, device, args, is_roberta=False, ):
     dataloader = DataLoader(tokenized_sent, batch_size=16, shuffle=False)
     
     dirs = os.listdir(model_dir)
@@ -56,7 +57,20 @@ def inference_ensemble(model_dir, tokenized_sent, device, is_roberta=False):
     final_output_pred=[]
     for i in range(len(dirs)):
         model_d = os.path.abspath(os.path.join(model_dir, dirs[i]))
-        model = AutoModelForSequenceClassification.from_pretrained(model_d)
+        if args.model_name is not None :
+            model_config = AutoConfig.from_pretrained(args.PLM)
+            model_config.num_labels = 30
+            mm = importlib.import_module('model')
+            MyModel = getattr(mm, args.model_name)
+
+            if MyModel.__name__ == 'ConcatFourClsModel':
+                model_config.update({'output_hidden_states': True})
+
+            model = MyModel(args.PLM, config=model_config)
+            model.load_state_dict(torch.load(
+                os.path.join(model_d, 'pytorch_model.pt')))
+        else :
+            model = AutoModelForSequenceClassification.from_pretrained(model_d)
         model.parameters
         model.to(device)
         
@@ -164,14 +178,27 @@ def main(args):
     Re_test_dataset = RE_Dataset(test_dataset, test_label)
 
     if args.k_fold:
-        pred_answer, output_prob = inference_ensemble(model_dir, Re_test_dataset, device, is_roberta)  # model에서 class 추론
+        pred_answer, output_prob = inference_ensemble(model_dir, Re_test_dataset, device, args, is_roberta)  # model에서 class 추론
         pred_answer = np.mean(pred_answer,axis=0)
         pred_answer = np.argmax(pred_answer,axis=-1)
         pred_answer = num_to_label(pred_answer)
         output_prob = np.mean(output_prob,axis=0).tolist()
-    
+     
     else:
-        model = AutoModelForSequenceClassification.from_pretrained(model_dir)
+        if args.model_name is not None :
+            model_config = AutoConfig.from_pretrained(args.PLM)
+            model_config.num_labels = 30
+            mm = importlib.import_module('model')
+            MyModel = getattr(mm, args.model_name)
+
+            if MyModel.__name__ == 'ConcatFourClsModel':
+                model_config.update({'output_hidden_states': True})
+
+            model = MyModel(args.PLM, config=model_config)
+            model.load_state_dict(torch.load(
+                os.path.join(model_dir, 'pytorch_model.pt')))
+        else :
+            model = AutoModelForSequenceClassification.from_pretrained(model_dir)
         model.parameters
         model.to(device)
         
@@ -211,7 +238,9 @@ if __name__ == '__main__':
         '--add_unk_token', default=False, action='store_true', help='add unknown token in vocab (default: False)')
     
     parser.add_argument("--k_fold", type=int, default=0, help='not k fold(defalut: 0)')
-    
+    parser.add_argument('--model_name', type=str, default=None,
+                        help='if want, you have to enter your model class name')
+
     args = parser.parse_args()
     print(args)
 

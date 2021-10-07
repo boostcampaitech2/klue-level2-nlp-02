@@ -4,22 +4,35 @@ import pandas as pd
 import torch
 import sklearn
 import numpy as np
-from sklearn.model_selection import train_test_split, StratifiedKFold
-from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
+from sklearn.metrics import accuracy_score
 from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer, DataCollatorWithPadding
-from Preprocessing.preprocessor import EntityPreprocessor, SenPreprocessor, UnkPreprocessor
+from load_data import *
+from modules.preprocessor import EntityPreprocessor, SenPreprocessor, UnkPreprocessor
 import argparse
 from pathlib import Path
 import random
+
 import wandb
 from dotenv import load_dotenv
-
-from load_data import *
-from augmentation import *
-from custom_model import *
+import importlib
+from modules.augmentation import *
+from modules.loss import use_criterion
 from tokenization import *
 
-def klue_re_micro_f1(preds, labels):
+
+dictionary_big_sort = {'no_relation':0, "per":1, "org":2}
+dictionary_per_sort = {'per:title': 0, 'per:employee_of': 1,  'per:product': 2, 
+                       'per:children': 3, 'per:place_of_residence': 4, 
+                       'per:alternate_names': 5, 'per:other_family': 6, 'per:colleagues': 7, 
+                       'per:origin': 8, 'per:siblings': 9, 'per:spouse': 10, 
+                       'per:parents': 11,  'per:schools_attended': 12, 
+                       'per:date_of_death': 13, 'per:date_of_birth': 14, 'per:place_of_birth': 15, 
+                       'per:place_of_death': 16,  'per:religion': 17}
+dictionary_org_sort = {'org:top_members/employees': 0, 'org:members': 1, 'org:product': 2,
+                       'org:alternate_names': 3, 'org:place_of_headquarters': 4, 'org:number_of_employees/members': 5, 'org:founded': 6,
+                       'org:political/religious_affiliation': 7, 'org:member_of': 8, 'org:dissolved': 9, 'org:founded_by': 10}
+
+def klue_re_micro_f1(preds, labels, model_type):
     """KLUE-RE micro f1 (except no_relation)"""
     label_list = ['no_relation', 'org:top_members/employees', 'org:members',
                   'org:product', 'per:title', 'org:alternate_names',
@@ -32,18 +45,43 @@ def klue_re_micro_f1(preds, labels):
                   'per:schools_attended', 'per:date_of_death', 'per:date_of_birth',
                   'per:place_of_birth', 'per:place_of_death', 'org:founded_by',
                   'per:religion']
-    no_relation_label_idx = label_list.index("no_relation")
-    label_indices = list(range(len(label_list)))
-    label_indices.remove(no_relation_label_idx)
+    
+    if model_type=="big_sort":
+        label_list=list(dictionary_big_sort.keys())
+        no_relation_label_idx = label_list.index("no_relation")
+        label_indices = list(range(len(label_list)))
+        label_indices.remove(no_relation_label_idx)
+        
+    elif model_type=="per_sort":
+        label_list=list(dictionary_per_sort.keys())
+        label_indices = list(range(len(label_list)))
+        
+    elif model_type=="org_sort":
+        label_list=list(dictionary_org_sort.keys())
+        label_indices = list(range(len(label_list)))
+        
+    else:
+        no_relation_label_idx = label_list.index("no_relation")
+        label_indices = list(range(len(label_list)))
+        label_indices.remove(no_relation_label_idx)
+    
     return sklearn.metrics.f1_score(labels, preds, average="micro", labels=label_indices) * 100.0
 
 
-def klue_re_auprc(probs, labels):
+def klue_re_auprc(probs, labels, model_type):
     """KLUE-RE AUPRC (with no_relation)"""
-    labels = np.eye(30)[labels]
+    k=30
+    if model_type=="big_sort":
+        k=3
+    elif model_type=="per_sort":
+        k=18
+    elif model_type=="org_sort":
+        k=11
+    
+    labels = np.eye(k)[labels]
 
-    score = np.zeros((30,))
-    for c in range(30):
+    score = np.zeros((k,))
+    for c in range(k):
         targets_c = labels.take([c], axis=1).ravel()
         preds_c = probs.take([c], axis=1).ravel()
         precision, recall, _ = sklearn.metrics.precision_recall_curve(
@@ -59,8 +97,8 @@ def compute_metrics(pred):
     probs = pred.predictions
 
     # calculate accuracy using sklearn's function
-    f1 = klue_re_micro_f1(preds, labels)
-    auprc = klue_re_auprc(probs, labels)
+    f1 = klue_re_micro_f1(preds, labels, args.model_type)
+    auprc = klue_re_auprc(probs, labels, args.model_type)
     acc = accuracy_score(labels, preds)  # 리더보드 평가에는 포함되지 않습니다.
 
     return {
@@ -70,17 +108,43 @@ def compute_metrics(pred):
     }
 
 
-def label_to_num(label):
+def label_to_num(label, model_type="default"):
     num_label = []
     with open('dict_label_to_num.pkl', 'rb') as f:
         dict_label_to_num = pickle.load(f)
     for v in label:
-        num_label.append(dict_label_to_num[v])
+        
+        if model_type=="default":
+            num_label.append(dict_label_to_num[v])
+        
+        elif model_type=="big_sort": # no_relation: 0, per: 1, org: 2
+            if "per" in v:
+                v="per"
+            if "org" in v:
+                v="org"
+            num_label.append(dictionary_big_sort[v])
+        
+        elif model_type=="per_sort":
+            num_label.append(dictionary_per_sort[v])
+            
+        elif model_type=="org_sort":
+            num_label.append(dictionary_org_sort[v])
 
     return num_label
 
+#https://huggingface.co/transformers/main_classes/trainer.html
+class MultilabelTrainer(Trainer):
+    def compute_loss(self, model, inputs, return_outputs=False):
+        labels = inputs.pop("labels")
+        outputs = model(**inputs)
+        logits = outputs.logits
+        loss_fn = use_criterion(args.criterion)
+        loss = loss_fn(logits, labels)
+        return (loss, outputs) if return_outputs else loss
+
 
 def train(args):
+    #import pdb;pdb.set_trace()
     # load model and tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.PLM)
 
@@ -90,13 +154,13 @@ def train(args):
     # Preprocessor
     sen_preprocessor = SenPreprocessor(args.preprocessing_cmb, args.mecab_flag)
     unk_preprocessor = UnkPreprocessor(tokenizer)
-    entity_preprocessor = EntityPreprocessor(args.entity_flag)
+    entity_preprocessor = EntityPreprocessor(args.entity_flag if args.model_name != 'Rroberta' else True)
 
     # load dataset
     if not args.use_rtt :
-        datasets = load_data("/opt/ml/dataset/train/train.csv", args.k_fold, args.eval_ratio)
+        datasets = load_data("/opt/ml/dataset/train/train.csv", args.k_fold, val_ratio=args.eval_ratio if args.eval_flag else 0, train=True)
     else :
-        datasets = load_data("/opt/ml/dataset/train/train_rtt.csv", args.k_fold, args.eval_ratio)
+        datasets = load_data("/opt/ml/dataset/train/train_rtt.csv", args.k_fold, val_ratio=args.eval_ratio if args.eval_flag else 0, train=True)
 
     for fold_idx, (train_dataset, test_dataset) in enumerate(datasets):
         
@@ -115,28 +179,23 @@ def train(args):
         if args.add_unk_token :
             tokenizer, added_token_num =  unk_preprocessor(list(train_dataset['sentence']),
                                                            list(train_dataset['subject_entity']),
-                                                           list(train_dataset['object_entity']))
+                                                           list(train_dataset['object_entity']),
+                                                           )
         #shuffle rows
         train_dataset = train_dataset.sample(frac=1,random_state=args.seed).reset_index(drop=True)
-
-        train_label = label_to_num(train_dataset['label'].values)
+        
+        train_label = label_to_num(train_dataset['label'].values, args.model_type)
         tokenized_train = tokenized_dataset(train_dataset, tokenizer)
-        RE_train_dataset = RE_Dataset(tokenized_train, train_label)
-      
-        if args.r_roberta :
-            tokenized_train = r_tokenized_dataset(train_dataset, tokenizer)
-            RE_train_dataset = r_RE_Dataset(tokenized_train, train_label, tokenizer) ## r_robert
+        RE_train_dataset = RE_Dataset(tokenized_train, train_label) if args.model_name != 'Rroberta' else r_RE_Dataset(tokenized_train, train_label, tokenizer)
+
 
         #eval set이 없으면 RE_dev_dataset에 RE_train_dataset 복사하여 사용
         if test_dataset is not None:
             test_dataset = preprocessing_dataset(test_dataset, sen_preprocessor, entity_preprocessor)
-            test_label = label_to_num(test_dataset['label'].values)
+            test_label = label_to_num(test_dataset['label'].values, args.model_type)
+
             tokenized_test = tokenized_dataset(test_dataset, tokenizer)
-            RE_dev_dataset = RE_Dataset(tokenized_test, test_label)
-            
-            if args.r_roberta :
-                tokenized_test = r_tokenized_dataset(test_dataset, tokenizer)
-                RE_dev_dataset = r_RE_Dataset(tokenized_test, test_label, tokenizer) ## r_robert
+            RE_dev_dataset = RE_Dataset(tokenized_test, test_label) if args.model_name != 'Rroberta' else r_RE_Dataset(tokenized_test, test_label, tokenizer)
         else:
             RE_dev_dataset = RE_train_dataset
         
@@ -153,11 +212,11 @@ def train(args):
         wandb.config.update(args)
 
         train_model(args, RE_train_dataset, RE_dev_dataset, fold_idx=fold_idx, dynamic_padding=dynamic_padding,
-                     tokenizer=tokenizer, added_token_num=added_token_num)
+                    tokenizer=tokenizer, added_token_num=added_token_num, model_type=args.model_type)
 
         wandb.finish()
-        
-    
+
+
 def train_model(
     args,
     RE_train_dataset,
@@ -165,28 +224,47 @@ def train_model(
     fold_idx,
     dynamic_padding,
     tokenizer,
-    added_token_num):
+    added_token_num,
+    model_type):
     
+
+    # Mymodel로 train을 하면 Mymodel을 불러옵니다.
+    MyModel = None
+
+    if args.model_name is not None :
+        mm = importlib.import_module('model')
+        MyModel = getattr(mm, args.model_name)
+    ############################################
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print(device)
 
     # setting model hyperparameter
     model_config = AutoConfig.from_pretrained(args.PLM)
-    model_config.num_labels = 30
+    if model_type=="big_sort":
+        model_config.num_labels=3
+    elif model_type=="per_sort":
+        model_config.num_labels=18
+    elif model_type=="org_sort":
+        model_config.num_labels=11
+    else:
+        model_config.num_labels = 30
+        
+    if MyModel is not None and MyModel.__name__ == 'ConcatFourClsModel':
+        model_config.update({'output_hidden_states': True})
 
     if args.use_mlm:
         model = AutoModelForSequenceClassification.from_pretrained(
             args.MLM_checkpoint, config=model_config)
+        
+    elif args.model_name is not None:
+        model = MyModel(args.PLM, config=model_config)
+    elif args.model_name is not None and args.use_mlm  : 
+        model = MyModel(args.MLM_checkpoint, config=model_config)       
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
             args.PLM, ignore_mismatched_sizes=args.ignore_mismatched, config=model_config)
     
-    if args.use_mlm and args.r_roberta : 
-        model = r_roberta(args.MLM_checkpoint, model_config, args.dropout_rate)
-    elif not args.use_mlm and args.r_roberta : 
-        model = r_roberta(args.PLM, model_config, args.dropout_rate)
-    
-    if args.use_mlm and args.add_unk_token :
+    if args.add_unk_token :
         model.resize_token_embeddings(tokenizer.vocab_size + added_token_num)
 
     print(model.config)
@@ -205,12 +283,12 @@ def train_model(
             weight_decay=args.weight_decay,                # strength of weight decay
             logging_dir='./logs',            # directory for storing logs
             logging_steps=100,               # log saving step.
-            evaluation_strategy=args.evaluation_strategy, # evaluation strategy to adopt during training
+            evaluation_strategy=args.evaluation_strategy if args.eval_flag else 'no',
             # `no`: No evaluation during training.
             # `steps`: Evaluate every `eval_steps`.
             # `epoch`: Evaluate every end of epoch.
-            eval_steps=500,           # evaluation step.
-            load_best_model_at_end=True,
+            eval_steps=500 if args.eval_flag else 0,           # evaluation step.
+            load_best_model_at_end=True if args.eval_flag else False,
             report_to="wandb"
         )
     trainer = Trainer(
@@ -218,35 +296,52 @@ def train_model(
         model=model,
         args=training_args,                  # training arguments, defined above
         train_dataset=RE_train_dataset,         # training dataset
-        eval_dataset=RE_dev_dataset, # evaluation dataset
+        eval_dataset=RE_dev_dataset if args.eval_flag else None, # evaluation dataset
         compute_metrics=compute_metrics,         # define metrics function
-        data_collator=dynamic_padding if args.r_roberta == False else None,
+        data_collator=dynamic_padding if args.model_name == 'Rroberta' else None,
         tokenizer=tokenizer)
 
 
     # train model
     trainer.train()
-    
+
     if args.k_fold:
-        model_save_pth = os.path.join(args.save_dir, args.PLM.replace(
-        '/', '-') + '-' + args.wandb_unique_tag.replace('/', '-') + "/" + str(fold_idx))
+        if model_type!="default":
+            folder_name = re.sub("orgsort|persort|bigsort","",args.wandb_unique_tag)
+            model_save_pth = os.path.join(args.save_dir, args.PLM.replace('/', '-') + '-' + folder_name.replace('/', '-') + "/" + model_type + "_" + str(fold_idx))
+        else:
+            model_save_pth = os.path.join(args.save_dir, args.PLM.replace('/', '-') + '-' + args.wandb_unique_tag.replace('/', '-') + "/" + str(fold_idx))
+            
         os.makedirs(model_save_pth, exist_ok=True)
-        model.save_pretrained(model_save_pth)
-        if args.r_roberta :
+        if MyModel is not None:
             torch.save(model.state_dict(), os.path.join(
-                model_save_pth, 'pytorch_model.pt'))
+            model_save_pth, 'pytorch_model.pt'))
+        else :
+            model.save_pretrained(model_save_pth)
+
         if args.add_unk_token :
             tokenizer.save_pretrained(model_save_pth+'/tokenizer')
     
+    elif model_type!="default":
+        folder_name = re.sub("orgsort|persort|bigsort","",args.wandb_unique_tag)
+        model_save_pth = os.path.join(args.save_dir, args.PLM.replace('/', '-') + '-' + folder_name.replace('/', '-') + "/" + model_type)
+        os.makedirs(model_save_pth, exist_ok=True)
+        if MyModel is not None:
+            torch.save(model.state_dict(), os.path.join(
+            model_save_pth, 'pytorch_model.pt'))
+        else :
+            model.save_pretrained(model_save_pth)
+    
     else:
         model_save_pth = os.path.join(args.save_dir, args.PLM.replace(
-        '/', '-') + '-' + args.wandb_unique_tag.replace('/', '-'))
+            '/', '-') + '-' + args.wandb_unique_tag.replace('/', '-'))
         os.makedirs(model_save_pth, exist_ok=True)
-        model.save_pretrained(model_save_pth)
-        if args.r_roberta :
+        if MyModel is not None:
             torch.save(model.state_dict(), os.path.join(
-                model_save_pth, 'pytorch_model.pt'))
-
+            model_save_pth, 'pytorch_model.pt'))
+        else :
+            model.save_pretrained(model_save_pth)
+        
         if args.add_unk_token :
             tokenizer.save_pretrained(model_save_pth+'/tokenizer')
 
@@ -269,7 +364,7 @@ if __name__ == '__main__':
                         help='model save at save_dir/PLM-wandb_unique_tag')
     parser.add_argument('--PLM', type=str, default='klue/bert-base',
                         help='model type (default: klue/bert-base)')
-    parser.add_argument('--MLM_checkpoint', type=str, default='./best_models/klue-roberta-large-tapt-rtt-mlm',
+    parser.add_argument('--MLM_checkpoint', type=str, default='./best_models/klue-roberta-large-rtt-pem-mlm',
                         help='MaskedLM pretrained model path')
     parser.add_argument('--use_mlm', default=False, action='store_true',
                         help='whether or not use MaskedLM pretrained model')
@@ -287,12 +382,10 @@ if __name__ == '__main__':
                         help='evaluation strategy to adopt during training, steps or epoch (default: steps)')
     parser.add_argument('--ignore_mismatched', type=bool, default=False,
                         help='ignore mismatched size when load pretrained model')
-    parser.add_argument('--dropout_rate', type=float, default=0.1,
-                        help='dropout_rate (default: 0.1)')
 
     # Validation
-    parser.add_argument('--eval_flag', default=True, action='store_true',
-                        help='eval flag (default: True)')
+    parser.add_argument('--eval_flag', default=False, action='store_true',
+                        help='eval flag (default: False)')
     parser.add_argument('--eval_ratio', type=float, default=0.2,
                         help='eval data size ratio (default: 0.2)')
     parser.add_argument('--eval_batch_size', type=int,
@@ -309,8 +402,8 @@ if __name__ == '__main__':
                         help='input your wandb unique tag (default: bert-base-high-lr)')
 
     # Running mode
-    parser.add_argument('--entity_flag', type=int, default=0,
-                        help='1: original 2: single (default: 0)')
+    parser.add_argument('--entity_flag', default=False, action='store_true',
+                        help='add Entity flag (default: False)')
     
     parser.add_argument('--preprocessing_cmb', nargs='+',
                         help='<Required> Set flag (example: 0 1 2)')
@@ -329,14 +422,19 @@ if __name__ == '__main__':
 
     parser.add_argument('--augmentation_flag', type=bool, default=False,
                         help="data augmentation by resampling")
-
-    parser.add_argument('--r_roberta', default=False, action='store_true',
-                        help=' custom model to r_roberta(default: False)')
     
     parser.add_argument('--use_rtt', default=False, action='store_true',
                     help='whether or not use rtt augmented dataset')
     
+    ## 주의사항 ##
+    ## model_type 사용 시, wandb_unique_tag는 use_prepro_entity_mecab_orgsort, use_prepro_entity_mecab_persort 등으로 끝부분 제외하고 통일시켜주시면 감사합니다!
+    parser.add_argument("--model_type", type=str, default='default', help='criterion type: big_sort, per_sort, org_sort')
+    
+    parser.add_argument('--model_name', type=str, default=None,
+                        help='if want, you have to enter your model class name (ConcatFourClsModel, AddFourClassifierRoberta, AddLayerNorm, Rroberta)')
+        
     args = parser.parse_args()
+    args.model_name = args.model_name.lower()
 
     # Start
     seed_everything(args.seed)

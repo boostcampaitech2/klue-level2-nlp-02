@@ -19,7 +19,6 @@ def num_to_label(label):
 
 def select_csv(base_path):
     csv_dir = base_path
-    # dirs = os.listdir(csv_dir)
     dirs = glob(os.path.join(csv_dir, '*.csv'))
     dirs = sorted(dirs)
 

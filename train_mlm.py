@@ -6,8 +6,8 @@ import numpy as np
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
 from transformers import AutoTokenizer, AutoConfig, AutoModelForMaskedLM, Trainer, TrainingArguments, DataCollatorWithPadding
 from load_data import *
-from Preprocessing.preprocessor import EntityPreprocessor, SenPreprocessor, UnkPreprocessor
-from tokenization import tokenized_dataset
+from modules.preprocessor import EntityPreprocessor, SenPreprocessor, UnkPreprocessor
+from tokenization import tokenized_dataset, tokenized_mlm_dataset
 from torch.utils.data.dataset import random_split
 
 import argparse
@@ -27,6 +27,11 @@ def train(args):
     dynamic_padding = DataCollatorWithPadding(tokenizer=tokenizer)
 
     # load dataset
+    if args.use_rtt:
+        train_data_path = "/opt/ml/dataset/train/train_rtt.csv"
+    else:
+        train_data_path = "/opt/ml/dataset/train/train.csv"
+
     if args.use_pem:
         # Define Preprocessor
         sen_preprocessor = SenPreprocessor(args.preprocessing_cmb, True)
@@ -34,14 +39,16 @@ def train(args):
         entity_preprocessor = EntityPreprocessor(True)
 
         # train이지만, list가 아니라 dataset으로 받아오기 위해 train=False
-        train_dataset = load_data("/opt/ml/dataset/train/train.csv", k_fold=0, val_ratio=0, train=False)
+        train_dataset = load_data(train_data_path, k_fold=0, val_ratio=0, train=False)
 
         # preprocessing
         train_dataset = preprocessing_dataset(train_dataset, sen_preprocessor, entity_preprocessor)
         # tokenizing dataset
         tokenized_train = tokenized_dataset(train_dataset, tokenizer, is_mlm=True)
     else:
-        train_dataset = load_mlm_data("/opt/ml/dataset/train/train.csv")
+        train_dataset = load_mlm_data(train_data_path)
+        # tokenizing dataset
+        tokenized_train = tokenized_mlm_dataset(train_dataset, tokenizer)
     
     MLM_train_dataset = MLM_Dataset(
         tokenized_train, tokenizer)
@@ -159,6 +166,8 @@ if __name__ == '__main__':
                         help='whether or not use preprocessing, entity, and mecab')
     parser.add_argument('--preprocessing_cmb', nargs='+',
                         help='<Required> Set flag (example: 0 1 2)')
+    parser.add_argument('--use_rtt', default=False, action='store_true',
+                        help='whether or not use rtt augmented dataset')
 
     # Validation
     parser.add_argument('--eval_flag', action='store_true',

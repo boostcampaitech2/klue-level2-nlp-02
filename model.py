@@ -18,6 +18,12 @@ class FCLayer(nn.Module):
         return self.linear(x)
 
 class Rroberta(RobertaPreTrainedModel):
+    """
+    r-bert 개념을 roberta에 적용.
+    subject, object에 해당하는 각각의 entity hidden state를 평균,
+    FC layer를 거친 뒤 cls vector와 concatenation하여 softmax.
+    return : (loss), logits, (hidden_states), (attentions)
+    """
     def __init__(self, model_name, config):
         print('Rroberta !!!')
         super().__init__(config)
@@ -84,7 +90,7 @@ class Rroberta(RobertaPreTrainedModel):
                 
             outputs = (loss,) + outputs
 
-        return outputs  # (loss), logits, (hidden_states), (attentions)
+        return outputs 
 
 class ConcatFourClsModel(RobertaPreTrainedModel):
     def __init__(self, model_name, config):

@@ -20,6 +20,11 @@ class RE_Dataset(Dataset):
         return len(self.labels)
 
 class r_RE_Dataset(RE_Dataset) :
+    """
+    subject, object entity embedding을 만들어주기 위한 클래스
+    subject : e1_mask
+    object : e2_mask
+    """
     def __init__(self, pair_dataset, labels, tokenizer):
         self.pair_dataset = pair_dataset
         self.labels = labels
@@ -74,7 +79,7 @@ def preprocessing_dataset(dataset, sen_preprocessor, entity_preprocessor):
     return out_dataset
 
 
-def load_data(dataset_dir, k_fold=0, val_ratio=0, train=True):
+def load_data(dataset_dir, k_fold=0, val_ratio=0, train=True, model_type="default"):
     """ 
         csv 파일을 경로에 맡게 불러 옵니다. 
         k_fold와 val_ratio를 통해 train data와 validation data를 나눕니다.
@@ -87,7 +92,12 @@ def load_data(dataset_dir, k_fold=0, val_ratio=0, train=True):
         # 라벨링이 다른 데이터 제거
         dataset = dataset.drop(index=[6749, 8364, 22258, 277, 25094])
         dataset = dataset.reset_index(drop=True)
-    
+
+    if model_type =="per_sort":
+        dataset=dataset[dataset['label'].str.contains('per')].reset_index(drop=True)
+    elif model_type =="org_sort":
+        dataset=dataset[dataset['label'].str.contains('org')].reset_index(drop=True)
+
     #datatype 변경
     dataset['subject_entity'] = dataset.subject_entity.map(eval)
     dataset['object_entity'] = dataset.object_entity.map(eval)

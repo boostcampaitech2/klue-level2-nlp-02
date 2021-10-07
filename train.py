@@ -31,38 +31,35 @@ dictionary_per_sort = {'per:title': 0, 'per:employee_of': 1,  'per:product': 2,
 dictionary_org_sort = {'org:top_members/employees': 0, 'org:members': 1, 'org:product': 2,
                        'org:alternate_names': 3, 'org:place_of_headquarters': 4, 'org:number_of_employees/members': 5, 'org:founded': 6,
                        'org:political/religious_affiliation': 7, 'org:member_of': 8, 'org:dissolved': 9, 'org:founded_by': 10}
+split_label_dict = {"big_sort" : dictionary_big_sort,
+                    "per_sort" : dictionary_per_sort,
+                    "org_sort" : dictionary_org_sort}
+
+num_label_list = {'big_sort' : 3,
+                  'per_sort' : 18,
+                  'org_sort' : 11,
+                  'default' : 30}
 
 def klue_re_micro_f1(preds, labels, model_type):
-    """KLUE-RE micro f1 (except no_relation)"""
-    label_list = ['no_relation', 'org:top_members/employees', 'org:members',
-                  'org:product', 'per:title', 'org:alternate_names',
-                  'per:employee_of', 'org:place_of_headquarters', 'per:product',
-                  'org:number_of_employees/members', 'per:children',
-                  'per:place_of_residence', 'per:alternate_names',
-                  'per:other_family', 'per:colleagues', 'per:origin', 'per:siblings',
-                  'per:spouse', 'org:founded', 'org:political/religious_affiliation',
-                  'org:member_of', 'per:parents', 'org:dissolved',
-                  'per:schools_attended', 'per:date_of_death', 'per:date_of_birth',
-                  'per:place_of_birth', 'per:place_of_death', 'org:founded_by',
-                  'per:religion']
-    
-    if model_type=="big_sort":
-        label_list=list(dictionary_big_sort.keys())
-        no_relation_label_idx = label_list.index("no_relation")
-        label_indices = list(range(len(label_list)))
-        label_indices.remove(no_relation_label_idx)
-        
-    elif model_type=="per_sort":
-        label_list=list(dictionary_per_sort.keys())
-        label_indices = list(range(len(label_list)))
-        
-    elif model_type=="org_sort":
-        label_list=list(dictionary_org_sort.keys())
-        label_indices = list(range(len(label_list)))
-        
+    """KLUE-RE micro f1 (except no_relation)"""    
+    if model_type in ["big_sort", "per_sort", "org_sort"]:
+        label_list=list(split_label_dict[model_type].keys())
     else:
+        label_list = ['no_relation', 'org:top_members/employees', 'org:members',
+                    'org:product', 'per:title', 'org:alternate_names',
+                    'per:employee_of', 'org:place_of_headquarters', 'per:product',
+                    'org:number_of_employees/members', 'per:children',
+                    'per:place_of_residence', 'per:alternate_names',
+                    'per:other_family', 'per:colleagues', 'per:origin', 'per:siblings',
+                    'per:spouse', 'org:founded', 'org:political/religious_affiliation',
+                    'org:member_of', 'per:parents', 'org:dissolved',
+                    'per:schools_attended', 'per:date_of_death', 'per:date_of_birth',
+                    'per:place_of_birth', 'per:place_of_death', 'org:founded_by',
+                    'per:religion']
+    
+    label_indices = list(range(len(label_list)))
+    if model_type in ["big_sort", "default"]:
         no_relation_label_idx = label_list.index("no_relation")
-        label_indices = list(range(len(label_list)))
         label_indices.remove(no_relation_label_idx)
     
     return sklearn.metrics.f1_score(labels, preds, average="micro", labels=label_indices) * 100.0
@@ -70,13 +67,8 @@ def klue_re_micro_f1(preds, labels, model_type):
 
 def klue_re_auprc(probs, labels, model_type):
     """KLUE-RE AUPRC (with no_relation)"""
-    k=30
-    if model_type=="big_sort":
-        k=3
-    elif model_type=="per_sort":
-        k=18
-    elif model_type=="org_sort":
-        k=11
+
+    k=num_label_list[model_type]
     
     labels = np.eye(k)[labels]
 
@@ -110,26 +102,16 @@ def compute_metrics(pred):
 
 def label_to_num(label, model_type="default"):
     num_label = []
-    with open('dict_label_to_num.pkl', 'rb') as f:
-        dict_label_to_num = pickle.load(f)
+    if model_type=="default":
+        with open('dict_label_to_num.pkl', 'rb') as f:
+            dict_label_to_num = pickle.load(f)
+    else:
+        dict_label_to_num = split_label_dict[model_type]
+    
     for v in label:
-        
-        if model_type=="default":
-            num_label.append(dict_label_to_num[v])
-        
-        elif model_type=="big_sort": # no_relation: 0, per: 1, org: 2
-            if "per" in v:
-                v="per"
-            if "org" in v:
-                v="org"
-            num_label.append(dictionary_big_sort[v])
-        
-        elif model_type=="per_sort":
-            num_label.append(dictionary_per_sort[v])
-            
-        elif model_type=="org_sort":
-            num_label.append(dictionary_org_sort[v])
-
+        if model_type=="big_sort": # no_relation: 0, per: 1, org: 2
+            v = v[:3] if v[:3] in ['per', 'org'] else v
+        num_label.append(dict_label_to_num[v])
     return num_label
 
 #https://huggingface.co/transformers/main_classes/trainer.html
@@ -144,7 +126,6 @@ class MultilabelTrainer(Trainer):
 
 
 def train(args):
-    #import pdb;pdb.set_trace()
     # load model and tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.PLM)
 
@@ -158,9 +139,14 @@ def train(args):
 
     # load dataset
     if not args.use_rtt :
-        datasets = load_data("/opt/ml/dataset/train/train.csv", args.k_fold, val_ratio=args.eval_ratio if args.eval_flag else 0, train=True)
+        datasets = load_data("/opt/ml/dataset/train/train.csv", args.k_fold,
+                val_ratio=args.eval_ratio if args.eval_flag else 0,
+                train=True, model_type=args.model_type)
+
     else :
-        datasets = load_data("/opt/ml/dataset/train/train_rtt.csv", args.k_fold, val_ratio=args.eval_ratio if args.eval_flag else 0, train=True)
+        datasets = load_data("/opt/ml/dataset/train/train_rtt.csv", args.k_fold,
+                val_ratio=args.eval_ratio if args.eval_flag else 0,
+                train=True, model_type=args.model_type)
 
     for fold_idx, (train_dataset, test_dataset) in enumerate(datasets):
         
@@ -170,7 +156,7 @@ def train(args):
             aug_data_by_mixing_entity = augmentation_by_resampling(train_dataset)
             aug_data_by_mixing_entity = preprocessing_dataset(aug_data_by_mixing_entity, sen_preprocessor, entity_preprocessor)
         train_dataset = preprocessing_dataset(train_dataset, sen_preprocessor, entity_preprocessor)
-        aug_data_by_aeda = aeda_dataset(train_dataset) if args.aeda_flag is True else None
+        aug_data_by_aeda = aeda(train_dataset) if args.aeda_flag is True else None
 
         #concatenate augmentation data and train data
         train_dataset = pd.concat([train_dataset, aug_data_by_mixing_entity, aug_data_by_aeda])
@@ -185,7 +171,7 @@ def train(args):
         train_dataset = train_dataset.sample(frac=1,random_state=args.seed).reset_index(drop=True)
         
         train_label = label_to_num(train_dataset['label'].values, args.model_type)
-        tokenized_train = tokenized_dataset(train_dataset, tokenizer)
+        tokenized_train = tokenized_dataset(train_dataset, tokenizer, args.model_name)
         RE_train_dataset = RE_Dataset(tokenized_train, train_label) if args.model_name != 'Rroberta' else r_RE_Dataset(tokenized_train, train_label, tokenizer)
 
 
@@ -194,7 +180,7 @@ def train(args):
             test_dataset = preprocessing_dataset(test_dataset, sen_preprocessor, entity_preprocessor)
             test_label = label_to_num(test_dataset['label'].values, args.model_type)
 
-            tokenized_test = tokenized_dataset(test_dataset, tokenizer)
+            tokenized_test = tokenized_dataset(test_dataset, tokenizer, args.model_name)
             RE_dev_dataset = RE_Dataset(tokenized_test, test_label) if args.model_name != 'Rroberta' else r_RE_Dataset(tokenized_test, test_label, tokenizer)
         else:
             RE_dev_dataset = RE_train_dataset
@@ -240,26 +226,18 @@ def train_model(
 
     # setting model hyperparameter
     model_config = AutoConfig.from_pretrained(args.PLM)
-    if model_type=="big_sort":
-        model_config.num_labels=3
-    elif model_type=="per_sort":
-        model_config.num_labels=18
-    elif model_type=="org_sort":
-        model_config.num_labels=11
-    else:
-        model_config.num_labels = 30
+    model_config.num_labels = num_label_list[model_type]
         
     if MyModel is not None and MyModel.__name__ == 'ConcatFourClsModel':
         model_config.update({'output_hidden_states': True})
 
-    if args.use_mlm:
-        model = AutoModelForSequenceClassification.from_pretrained(
-            args.MLM_checkpoint, config=model_config)
-        
+    if args.model_name is not None and args.use_mlm  :
+        model = MyModel(args.MLM_checkpoint, config=model_config)   
     elif args.model_name is not None:
         model = MyModel(args.PLM, config=model_config)
-    elif args.model_name is not None and args.use_mlm  : 
-        model = MyModel(args.MLM_checkpoint, config=model_config)       
+    elif args.use_mlm:
+        model = AutoModelForSequenceClassification.from_pretrained(
+            args.MLM_checkpoint, config=model_config)  
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
             args.PLM, ignore_mismatched_sizes=args.ignore_mismatched, config=model_config)

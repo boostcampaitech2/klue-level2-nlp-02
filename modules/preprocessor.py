@@ -6,6 +6,13 @@ from typing import Dict, List, Tuple
 from tqdm import tqdm
 from konlpy.tag import Mecab
 
+""" 
+Roberta tokenizer 기준으로 unk token 줄이는 방향의 preprocessing
+다른 tokenizer에서 추가 기능이 필요하시면 말씀해주세요
+
+해당 전처리는 train, test에 동일하게 적용되어야함
+"""
+
 # Sentence Preprocessor
 class SenPreprocessor :
     def __init__(self, preprocessing_cmb, mecab_flag) :
@@ -31,7 +38,7 @@ class SenPreprocessor :
         return sentence
 
     def remove_special_char(self, sentence):
-        """ 독일어, 사우디어, 라틴어 제거 """
+        """ 독일어, 사우디어, 라틴어 및 unk 특수문자 제거 """
         sentence = re.sub(r'[À-ÿ]+','', sentence) # 독일어
         sentence = re.sub(r'[\u0600-\u06FF]+','', sentence)  # 사우디어
         sentence = re.sub(r'[\u00C0-\u02B0]+','', sentence)  # 라틴어
@@ -39,6 +46,7 @@ class SenPreprocessor :
         return sentence
 
     def substitution_special_char(self, sentence):
+        """ unk 특수문자 비슷한 모양으로 치환 """
         sentence = re.sub('–','─', sentence)
         sentence = re.sub('⟪','《', sentence)
         sentence = re.sub('⟫','》', sentence)
@@ -49,6 +57,7 @@ class SenPreprocessor :
         return sentence
 
     def add_space_char(self, sentence):
+        """ ','로 연결된 한글 띄어주기 """
         def add_space(match):
             res_str = ', '.join(match.group().split(',')).rstrip()
             return res_str
@@ -58,7 +67,7 @@ class SenPreprocessor :
 
     def substitution_date(self, sentence):
         """
-        기간 표시 '-' => '~'
+        기간 포맷팅 '-' => '~'
         1223년 – => 1223년 ~ 
         """
         def sub_tibble(match):
@@ -82,61 +91,10 @@ class SenPreprocessor :
         return mecab_sentence
 
 # UKN tokenizer 처리
-""" 
-Roberta tokenizer 기준으로 unk token 줄이는 방향의 preprocessing
-다른 tokenizer에서 추가 기능이 필요하시면 말씀해주세요
-
-해당 전처리는 train, test에 동일하게 적용되어야함
-"""
-
-def remove_special_char(sentence):
-    """ 특수문자 및 독일어 제거, 수정"""
-    sentence = re.sub(r'[À-ÿ]+','', sentence) # 독일어
-    sentence = re.sub(r'[\u0600-\u06FF]+','', sentence)  # 사우디어
-    sentence = re.sub(r'[\u00C0-\u02B0]+','', sentence)  # 라틴어
-    sentence = re.sub(r'[ß↔Ⓐب€☎☏±∞]+','', sentence)
-    return sentence
-
-
-def substitution_special_char(sentence):
-    sentence = re.sub('–','─', sentence)
-    sentence = re.sub('⟪','《', sentence)
-    sentence = re.sub('⟫','》', sentence)
-    sentence = re.sub('･','・', sentence)
-    sentence = re.sub('µ','ℓ', sentence)
-    sentence = re.sub('®','㈜', sentence)
-    sentence = re.sub('～','㈜', sentence)
-    return sentence
-
-def add_space_char(sentence):
-    def add_space(match):
-        res_str = ', '.join(match.group().split(',')).rstrip()
-        return res_str
-    p = re.compile(r'([기-힣\w\-]+,)+[기-힣\w\-]+')
-    sentence = p.sub(add_space, sentence)
-    return sentence
-
-
-def substitution_date(sentence):
-    """
-    기간 표시 '-' => '~'
-    1223년 – => 1223년 ~ 
-    """
-    def sub_tibble(match):
-        res_str = re.sub('[–\-]', '~', match.group())
-        return res_str
-    re_patterns = [
-        r'(\d{2,4}년\s*)(\d{1,2}[월|일]\s*)(\d{1,2}[월|일])\s*[–\-]',
-        r'(\d{2,4}년\s*)(\d{1,2}[월|일]\s*)\s*[–\-]',
-        r'(\d{2,4}년\s*)\s*[–\-]',
-        r'\((\d{4}[–\-]\d{2,4})\)'
-    ]
-    for re_pattern in re_patterns:
-        p = re.compile(re_pattern)
-        sentence = p.sub(sub_tibble, sentence)
-    return sentence
-
 class UnkPreprocessor :
+    """
+    tokenizer가 unk으로 분류하는 단어들 찾기 및 추가
+    """
     def __init__(self, tokenizer) :
         self.tokenizer = tokenizer
  

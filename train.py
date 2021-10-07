@@ -2,23 +2,23 @@
 import pickle as pickle
 import os
 import pandas as pd
-import torch.nn as nn
 import torch
-import torch.nn.functional as F
 import sklearn
 import numpy as np
 from sklearn.model_selection import train_test_split, StratifiedKFold
-from loss import use_criterion
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
 from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer, DataCollatorWithPadding
 from load_data import *
-
+from Preprocessing.preprocessor import EntityPreprocessor, SenPreprocessor, UnkPreprocessor
 import argparse
 from pathlib import Path
-
 import random
+from loss import use_criterion
 import wandb
 from dotenv import load_dotenv
+from augmentation import *
+from tokenization import tokenized_dataset
+import importlib
 
 dictionary_big_sort = {'no_relation':0, "per":1, "org":2}
 dictionary_per_sort = {'per:title': 0, 'per:employee_of': 1,  'per:product': 2, 
@@ -32,7 +32,7 @@ dictionary_org_sort = {'org:top_members/employees': 0, 'org:members': 1, 'org:pr
                        'org:alternate_names': 3, 'org:place_of_headquarters': 4, 'org:number_of_employees/members': 5, 'org:founded': 6,
                        'org:political/religious_affiliation': 7, 'org:member_of': 8, 'org:dissolved': 9, 'org:founded_by': 10}
 
-def klue_re_micro_f1(preds, labels, model_type):
+def klue_re_micro_f1(preds, labels):
     """KLUE-RE micro f1 (except no_relation)"""
     label_list = ['no_relation', 'org:top_members/employees', 'org:members',
                   'org:product', 'per:title', 'org:alternate_names',
@@ -64,10 +64,7 @@ def klue_re_micro_f1(preds, labels, model_type):
         no_relation_label_idx = label_list.index("no_relation")
         label_indices = list(range(len(label_list)))
         label_indices.remove(no_relation_label_idx)
-        
-    # no_relation_label_idx = label_list.index("no_relation")
-    # label_indices = list(range(len(label_list)))
-    # label_indices.remove(no_relation_label_idx)
+    
     return sklearn.metrics.f1_score(labels, preds, average="micro", labels=label_indices) * 100.0
 
 
@@ -97,7 +94,6 @@ def compute_metrics(pred):
     """ validation을 위한 metrics function """
     labels = pred.label_ids
     preds = pred.predictions.argmax(-1)
-    print(len(set(preds)))
     probs = pred.predictions
 
     # calculate accuracy using sklearn's function
@@ -112,7 +108,7 @@ def compute_metrics(pred):
     }
 
 
-def label_to_num(label, model_type="per_sort"):
+def label_to_num(label, model_type="defalut"):
     num_label = []
     with open('dict_label_to_num.pkl', 'rb') as f:
         dict_label_to_num = pickle.load(f)
@@ -136,17 +132,12 @@ def label_to_num(label, model_type="per_sort"):
 
     return num_label
 
-
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
-
-
 #https://huggingface.co/transformers/main_classes/trainer.html
 class MultilabelTrainer(Trainer):
     def compute_loss(self, model, inputs, return_outputs=False):
-        labels = inputs.pop("labels") # "labels" in inputs 기능으로 label 가져오기!
-        outputs = model(**inputs) # input으로 모델이 예측!
-        logits = outputs.logits # model 결과값
+        labels = inputs.pop("labels")
+        outputs = model(**inputs)
+        logits = outputs.logits
         loss_fn = use_criterion(args.criterion)
         loss = loss_fn(logits, labels)
         return (loss, outputs) if return_outputs else loss
@@ -154,61 +145,93 @@ class MultilabelTrainer(Trainer):
 
 def train(args):
     # load model and tokenizer
-    MODEL_NAME = args.PLM
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    tokenizer = AutoTokenizer.from_pretrained(args.PLM)
 
     # dynamic padding
     dynamic_padding = DataCollatorWithPadding(tokenizer=tokenizer)
 
-    train_dataset = load_data("/opt/ml/dataset/train/train.csv",
-                              args.entity_flag, args.preprocessing_flag, args.mecab_flag, args.model_type)
+    # Preprocessor
+    sen_preprocessor = SenPreprocessor(args.preprocessing_cmb, args.mecab_flag)
+    unk_preprocessor = UnkPreprocessor(tokenizer)
+    entity_preprocessor = EntityPreprocessor(args.entity_flag)
+
+    # load dataset
+    datasets = load_data("/opt/ml/dataset/train/train_rtt.csv", args.k_fold, args.eval_ratio)
     
-    train_label = label_to_num(train_dataset['label'].values, args.model_type)
-    
-    if args.k_fold:
-        skf = StratifiedKFold(n_splits=args.k_fold, shuffle=True)
+    for fold_idx, (train_dataset, test_dataset) in enumerate(datasets):
         
-        for fold_idx, (train_idx, valid_idx) in enumerate(skf.split(train_dataset,train_label),1):
-            train_lists, train_labels = train_dataset.loc[train_idx], list(np.array(train_label)[train_idx])
-            valid_lists, valid_labels = train_dataset.loc[valid_idx], list(np.array(train_label)[valid_idx])
-            
-            tokenized_train = tokenized_dataset(train_lists, tokenizer)  # UNK token count
-            tokenized_valid = tokenized_dataset(valid_lists, tokenizer)  # UNK token count
-            RE_train_dataset = RE_Dataset(tokenized_train, train_labels, args.seed)
-            RE_dev_dataset = RE_Dataset(tokenized_valid, valid_labels, args.eval_ratio, args.seed)
-            
-            load_dotenv(dotenv_path=args.dotenv_path)
-            WANDB_AUTH_KEY = os.getenv('WANDB_AUTH_KEY')
-            wandb.login(key=WANDB_AUTH_KEY)
-            
-            wandb.init(
-                entity="klue-level2-nlp-02",
-                project="Relation-Extraction",
-                name=args.wandb_unique_tag+"_"+str(fold_idx),
-                group=args.PLM+"-k_fold")
-            
-            wandb.config.update(args)
-            train_model(args=args,RE_train_dataset=RE_train_dataset, RE_dev_dataset=RE_dev_dataset, fold_idx=fold_idx, dynamic_padding=dynamic_padding, tokenizer=tokenizer, model_type=args.model_type)
-            wandb.finish()
-            
-    else:
-        # tokenizing dataset
-        tokenized_train = tokenized_dataset(train_dataset, tokenizer)  # UNK token count
+        #agumentation and preprocessing
+        aug_data_by_mixing_entity = None
+        if args.augmentation_flag is True:
+            aug_data_by_mixing_entity = augmentation_by_resampling(train_dataset)
+            aug_data_by_mixing_entity = preprocessing_dataset(aug_data_by_mixing_entity, sen_preprocessor, entity_preprocessor)
+        train_dataset = preprocessing_dataset(train_dataset, sen_preprocessor, entity_preprocessor)
+        aug_data_by_aeda = aeda_dataset(train_dataset) if args.aeda_flag is True else None
+
+        #concatenate augmentation data and train data
+        train_dataset = pd.concat([train_dataset, aug_data_by_mixing_entity, aug_data_by_aeda])
+
+        #shuffle rows
+        train_dataset = train_dataset.sample(frac=1,random_state=args.seed).reset_index(drop=True)
+
+        train_label = label_to_num(train_dataset['label'].values)
+        tokenized_train = tokenized_dataset(train_dataset, tokenizer)
+        RE_train_dataset = RE_Dataset(tokenized_train, train_label)
+
+        #eval set이 없으면 RE_dev_dataset에 RE_train_dataset 복사하여 사용
+        if test_dataset is not None:
+            test_dataset = preprocessing_dataset(test_dataset, sen_preprocessor, entity_preprocessor)
+            test_label = label_to_num(test_dataset['label'].values)
+            tokenized_test = tokenized_dataset(test_dataset, tokenizer)
+            RE_dev_dataset = RE_Dataset(tokenized_test, test_label)
+        else:
+            RE_dev_dataset = RE_train_dataset
         
-        RE_train_dataset = RE_Dataset(tokenized_train, train_label, args.eval_ratio, args.seed)
+        added_token_num = 0
+        if args.add_unk_token :
+            tokenizer, added_token_num =  unk_preprocessor(list(train_dataset['sentence']),
+                                                           list(train_dataset['subject_entity']),
+                                                           list(train_dataset['object_entity']),
+                                                           )
+        #wandb
+        load_dotenv(dotenv_path=args.dotenv_path)
+        WANDB_AUTH_KEY = os.getenv('WANDB_AUTH_KEY')
+        wandb.login(key=WANDB_AUTH_KEY)
         
-        train_model(args, RE_train_dataset, RE_dev_dataset=0, fold_idx=0, dynamic_padding=dynamic_padding, tokenizer=tokenizer, model_type=args.model_type)
+        wandb.init(
+            entity="klue-level2-nlp-02",
+            project="Relation-Extraction_1001",
+            name=args.wandb_unique_tag+"_"+str(fold_idx),
+            group=args.PLM+"-k_fold" if args.k_fold > 0 else args.PLM)
+        wandb.config.update(args)
+
+        train_model(args, RE_train_dataset, RE_dev_dataset, fold_idx=fold_idx, dynamic_padding=dynamic_padding,
+                     tokenizer=tokenizer, added_token_num=added_token_num, model_type=args.model_type)
+
+        wandb.finish()
 
 
-def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,tokenizer,model_type):
+def train_model(
+    args,
+    RE_train_dataset,
+    RE_dev_dataset,
+    fold_idx,
+    dynamic_padding,
+    tokenizer,
+    added_token_num,
+    model_type):
     
-    # Split validation dataset
-    if args.eval_flag == True and args.k_fold==0:
-        RE_train_dataset, RE_dev_dataset = RE_train_dataset.split()
 
-    #device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    
+    # Mymodel로 train을 하면 Mymodel을 불러옵니다.
+    MyModel = None
+
+    if args.model_name is not None :
+        mm = importlib.import_module('model')
+        MyModel = getattr(mm, args.model_name)
+    ############################################
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print(device)
+
     # setting model hyperparameter
     model_config = AutoConfig.from_pretrained(args.PLM)
     if model_type=="big_sort":
@@ -219,152 +242,101 @@ def train_model(args,RE_train_dataset,RE_dev_dataset,fold_idx,dynamic_padding,to
         model_config.num_labels=11
     else:
         model_config.num_labels = 30
+        
+    if MyModel is not None and MyModel.__name__ == 'ConcatFourClsModel':
+        model_config.update({'output_hidden_states': True})
 
-    model = AutoModelForSequenceClassification.from_pretrained(
-        args.PLM, ignore_mismatched_sizes=args.ignore_mismatched, config=model_config)
+    if args.use_mlm:
+        model = AutoModelForSequenceClassification.from_pretrained(
+            args.MLM_checkpoint, config=model_config)
+        
+    elif args.model_name is not None:
+        model = MyModel(args.PLM, config=model_config)
+        
+    else:
+        model = AutoModelForSequenceClassification.from_pretrained(
+            args.PLM, ignore_mismatched_sizes=args.ignore_mismatched, config=model_config)
+    
+    if args.add_unk_token :
+        model.resize_token_embeddings(tokenizer.vocab_size + added_token_num)
+
     print(model.config)
     model.parameters
     model.to(device)
-    
-    if args.eval_flag == True or args.k_fold:
-        training_args = TrainingArguments(
-            output_dir='./results',          # output directory
-            save_total_limit=5,              # number of total save model.
-            save_steps=500,                  # model saving step.
-            num_train_epochs=args.epochs,              # total number of training epochs
-            learning_rate=args.lr,                     # learning_rate
-            # batch size per device during training
-            per_device_train_batch_size=args.train_batch_size,
-            per_device_eval_batch_size=args.eval_batch_size,    # batch size for evaluation
-            # number of warmup steps for learning rate scheduler
-            warmup_steps=args.warmup_steps,
-            weight_decay=args.weight_decay,                # strength of weight decay
-            logging_dir='./logs',            # directory for storing logs
-            logging_steps=100,               # log saving step.
-            # evaluation strategy to adopt during training
-            evaluation_strategy=args.evaluation_strategy,
-            # `no`: No evaluation during training.
-            # `steps`: Evaluate every `eval_steps`.
-            # `epoch`: Evaluate every end of epoch.
-            eval_steps=500,           # evaluation step.
-            load_best_model_at_end=True,
-            report_to="wandb"
-        )
-        
-        if args.criterion=='default':
-            trainer = Trainer(
-                # the instantiated 🤗 Transformers model to be trained
-                model=model,
-                args=training_args,                  # training arguments, defined above
-                train_dataset=RE_train_dataset,         # training dataset
-                eval_dataset=RE_dev_dataset,             # evaluation dataset
-                compute_metrics=compute_metrics,         # define metrics function
-                data_collator=dynamic_padding,
-                tokenizer=tokenizer,
-            )
-        else:
-            trainer = MultilabelTrainer(
-                # the instantiated 🤗 Transformers model to be trained
-                model=model,
-                args=training_args,                  # training arguments, defined above
-                train_dataset=RE_train_dataset,         # training dataset
-                eval_dataset=RE_dev_dataset,             # evaluation dataset
-                compute_metrics=compute_metrics,         # define metrics function
-                data_collator=dynamic_padding,
-                tokenizer=tokenizer,
-            )
 
-    else:
-        training_args = TrainingArguments(
+    training_args = TrainingArguments(
             output_dir='./results',          # output directory
             save_total_limit=5,              # number of total save model.
             save_steps=500,                  # model saving step.
             num_train_epochs=args.epochs,              # total number of training epochs
             learning_rate=args.lr,                     # learning_rate
-            # batch size per device during training
-            per_device_train_batch_size=args.train_batch_size,
+            per_device_train_batch_size=args.train_batch_size, # batch size per device during training
             per_device_eval_batch_size=args.eval_batch_size,    # batch size for evaluation
-            # number of warmup steps for learning rate scheduler
-            warmup_steps=args.warmup_steps,
+            warmup_steps=args.warmup_steps, # number of warmup steps for learning rate scheduler
             weight_decay=args.weight_decay,                # strength of weight decay
             logging_dir='./logs',            # directory for storing logs
             logging_steps=100,               # log saving step.
-            # evaluation strategy to adopt during training
-            evaluation_strategy=args.evaluation_strategy,
+            evaluation_strategy=args.evaluation_strategy if args.eval_flag else 'no',
             # `no`: No evaluation during training.
             # `steps`: Evaluate every `eval_steps`.
             # `epoch`: Evaluate every end of epoch.
-            eval_steps=500,           # evaluation step.
-            load_best_model_at_end=True,
+            eval_steps=500 if args.eval_flag else 0,           # evaluation step.
+            load_best_model_at_end=True if args.eval_flag else False,
             report_to="wandb"
         )
-        
-        if args.criterion=='default':
-            trainer = Trainer(
-                # the instantiated 🤗 Transformers model to be trained
-                model=model,
-                args=training_args,                  # training arguments, defined above
-                train_dataset=RE_train_dataset,         # training dataset
-                eval_dataset=RE_train_dataset,             # evaluation dataset
-                compute_metrics=compute_metrics,         # define metrics function
-                data_collator=dynamic_padding,
-                tokenizer=tokenizer,
-            )
-        
-        else:
-            trainer = MultilabelTrainer(
-                # the instantiated 🤗 Transformers model to be trained
-                model=model,
-                args=training_args,                  # training arguments, defined above
-                train_dataset=RE_train_dataset,         # training dataset
-                eval_dataset=RE_train_dataset,             # evaluation dataset
-                compute_metrics=compute_metrics,         # define metrics function
-                data_collator=dynamic_padding,
-                tokenizer=tokenizer,
-            )
+    trainer = Trainer(
+        # the instantiated 🤗 Transformers model to be trained
+        model=model,
+        args=training_args,                  # training arguments, defined above
+        train_dataset=RE_train_dataset,         # training dataset
+        eval_dataset=RE_dev_dataset if args.eval_flag else None, # evaluation dataset
+        compute_metrics=compute_metrics,         # define metrics function
+        data_collator=dynamic_padding,
+        tokenizer=tokenizer)
+
 
     # train model
     trainer.train()
-    
+
     if args.k_fold:
         if model_type!="default":
             folder_name = re.sub("orgsort|persort|bigsort","",args.wandb_unique_tag)
             model_save_pth = os.path.join(args.save_dir, args.PLM.replace('/', '-') + '-' + folder_name.replace('/', '-') + "/" + model_type + "_" + str(fold_idx))
         else:
             model_save_pth = os.path.join(args.save_dir, args.PLM.replace('/', '-') + '-' + args.wandb_unique_tag.replace('/', '-') + "/" + str(fold_idx))
+            
         os.makedirs(model_save_pth, exist_ok=True)
-        model.save_pretrained(model_save_pth)
+        if MyModel is not None:
+            torch.save(model.state_dict(), os.path.join(
+            model_save_pth, 'pytorch_model.pt'))
+        else :
+            model.save_pretrained(model_save_pth)
+
+        if args.add_unk_token :
+            tokenizer.save_pretrained(model_save_pth+'/tokenizer')
     
     elif model_type!="default":
         folder_name = re.sub("orgsort|persort|bigsort","",args.wandb_unique_tag)
         model_save_pth = os.path.join(args.save_dir, args.PLM.replace('/', '-') + '-' + folder_name.replace('/', '-') + "/" + model_type)
         os.makedirs(model_save_pth, exist_ok=True)
-        model.save_pretrained(model_save_pth)
-        
-        
+        if MyModel is not None:
+            torch.save(model.state_dict(), os.path.join(
+            model_save_pth, 'pytorch_model.pt'))
+        else :
+            model.save_pretrained(model_save_pth)
+    
     else:
-        model_save_pth = os.path.join(args.save_dir, args.PLM.replace('/', '-') + '-' + args.wandb_unique_tag.replace('/', '-'))
+        model_save_pth = os.path.join(args.save_dir, args.PLM.replace(
+            '/', '-') + '-' + args.wandb_unique_tag.replace('/', '-'))
         os.makedirs(model_save_pth, exist_ok=True)
-        model.save_pretrained(model_save_pth)
-
-
-
-def main(args):
-    if args.k_fold==0:
-        load_dotenv(dotenv_path=args.dotenv_path)
-        WANDB_AUTH_KEY = os.getenv('WANDB_AUTH_KEY')
-        wandb.login(key=WANDB_AUTH_KEY)
-
-        wandb.init(
-            entity="klue-level2-nlp-02",
-            project="Relation-Extraction_1001",
-            name=args.wandb_unique_tag,
-            group=args.PLM)
-        wandb.config.update(args)
-        train(args)
-        wandb.finish()
-    else:
-        train(args)
+        if MyModel is not None:
+            torch.save(model.state_dict(), os.path.join(
+            model_save_pth, 'pytorch_model.pt'))
+        else :
+            model.save_pretrained(model_save_pth)
+        
+        if args.add_unk_token :
+            tokenizer.save_pretrained(model_save_pth+'/tokenizer')
 
 
 def seed_everything(seed):
@@ -385,6 +357,10 @@ if __name__ == '__main__':
                         help='model save at save_dir/PLM-wandb_unique_tag')
     parser.add_argument('--PLM', type=str, default='klue/bert-base',
                         help='model type (default: klue/bert-base)')
+    parser.add_argument('--MLM_checkpoint', type=str, default='./best_models/klue-roberta-large-rtt-pem-mlm',
+                        help='MaskedLM pretrained model path')
+    parser.add_argument('--use_mlm', default=False, action='store_true',
+                        help='whether or not use MaskedLM pretrained model')
     parser.add_argument('--epochs', type=int, default=3,
                         help='number of epochs to train (default: 3)')
     parser.add_argument('--lr', type=float, default=5e-5,
@@ -401,8 +377,8 @@ if __name__ == '__main__':
                         help='ignore mismatched size when load pretrained model')
 
     # Validation
-    parser.add_argument('--eval_flag', default=True, action='store_true',
-                        help='eval flag (default: True)')
+    parser.add_argument('--eval_flag', default=False, action='store_true',
+                        help='eval flag (default: False)')
     parser.add_argument('--eval_ratio', type=float, default=0.2,
                         help='eval data size ratio (default: 0.2)')
     parser.add_argument('--eval_batch_size', type=int,
@@ -421,22 +397,36 @@ if __name__ == '__main__':
     # Running mode
     parser.add_argument('--entity_flag', default=False, action='store_true',
                         help='add Entity flag (default: False)')
-    parser.add_argument('--preprocessing_flag', default=False, action='store_true',
-                        help='input text pre-processing (default: False)')
+    
+    parser.add_argument('--preprocessing_cmb', nargs='+',
+                        help='<Required> Set flag (example: 0 1 2)')
+
     parser.add_argument('--mecab_flag', default=False, action='store_true',
                         help='input text pre-processing (default: False)')
     
-    parser.add_argument("--k_fold", type=int, default=0, help='not k fold(defalut: 0)')
-    parser.add_argument("--criterion", type=str, default='default', help='criterion type: label_smoothing, focal_loss')
+    parser.add_argument('--add_unk_token', default=False, action='store_true',
+                        help='add unknown token in vocab (default: False)')
+    
+    parser.add_argument("--k_fold", type=int, default=0,
+                        help='not k fold(defalut: 0)')
+
+    parser.add_argument('--aeda_flag', type=bool, default=False,
+                        help='Number of adea agmentations (default: 0)')
+
+    parser.add_argument('--augmentation_flag', type=bool, default=False,
+                        help="data augmentation by resampling")
     
     ## 주의사항 ##
     ## model_type 사용 시, wandb_unique_tag는 use_prepro_entity_mecab_orgsort, use_prepro_entity_mecab_persort 등으로 끝부분 제외하고 통일시켜주시면 감사합니다!
-    ## 이유는 같은 폴더 안에 넣기 위함입니다!
     parser.add_argument("--model_type", type=str, default='default', help='criterion type: big_sort, per_sort, org_sort')
+    
+    parser.add_argument('--model_name', type=str, default=None,
+                        help='if want, you have to enter your model class name')
     
     args = parser.parse_args()
 
     # Start
     seed_everything(args.seed)
 
-    main(args)
+    # main(args)
+    train(args)

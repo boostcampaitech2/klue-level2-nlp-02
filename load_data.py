@@ -1,212 +1,248 @@
 # -*- coding: utf-8 -*-
 import pickle as pickle
-import os
-import re
 import pandas as pd
 import collections
 import random
 import torch
-from tqdm import tqdm
 from torch.utils.data import Dataset, Subset
-from Preprocessing.preprocessor import *
-
+from sklearn.model_selection import StratifiedKFold
 
 class RE_Dataset(Dataset):
     """ Dataset 구성을 위한 class."""
-
-    def __init__(self, pair_dataset, labels,
-                 val_ratio=0.2, seed=2):
-        self.pair_dataset = pair_dataset
+    def __init__(self, dataset, labels,
+                #  val_ratio=0.2, seed=2
+                 ):
+        # random.seed(seed)
+        self.dataset = dataset
         self.labels = labels
-        self.val_ratio = val_ratio
+        # self.val_ratio = val_ratio
 
     def __getitem__(self, idx):
-        item = {key: val[idx] for key, val in self.pair_dataset.items()}
+        item = {key: val[idx] for key, val in self.dataset.items()} #id,sentence, subject_entity,object_entity,label
         item['labels'] = torch.tensor(self.labels[idx])
         return item
 
     def __len__(self):
         return len(self.labels)
 
-    def split(self):
-        data_size = len(self)
-        index_map = collections.defaultdict(list)
-        for idx in range(data_size):
-            label = self.labels[idx]
-            index_map[label].append(idx)
 
-        train_data = []
-        val_data = []
-
-        label_size = len(index_map)
-        for label in range(label_size):
-            idx_list = index_map[label]
-            sample_size = int(len(idx_list) * self.val_ratio)
-
-            val_index = random.sample(idx_list, sample_size)
-            train_index = list(set(idx_list) - set(val_index))
-
-            train_data.extend(train_index)
-            val_data.extend(val_index)
-
-        random.shuffle(train_data)
-        random.shuffle(val_data)
-
-        train_dset = Subset(self, train_data)
-        val_dset = Subset(self, val_data)
-        return train_dset, val_dset
-
-
-def text_preprocessing(sentence):
-    sent = remove_special_char(sentence)
-    sent = substitution_date(sent)
-    sent = add_space_char(sent)
-    return sent
-
-
-def preprocessing_dataset(dataset, entity_flag=0, preprocessing_flag=0, mecab_flag=0):
+def preprocessing_dataset(dataset, sen_preprocessor, entity_preprocessor):
     """ 처음 불러온 csv 파일을 원하는 형태의 DataFrame으로 변경 시켜줍니다."""
-    subject_entity = []
-    object_entity = []
+    
+    subject_entity, object_entity = list(zip(*dataset.apply(lambda x : [x['subject_entity']['word'], x['object_entity']['word']], axis=1)))
 
-    # sentence에 entity 속성 추가
-    for i, j in zip(dataset['subject_entity'], dataset['object_entity']):
-        i = eval(i)['word']
-        j = eval(j)['word']
+    # Data Sentence Entity processor
+    dataset = entity_preprocessor(dataset)
 
-        subject_entity.append(i)
-        object_entity.append(j)
+    # Sentence Preprocessor
+    sen_data = [sen_preprocessor(sen) for sen in dataset['sentence']]
+    subject_data = [sen_preprocessor(sub) for sub in subject_entity]
+    object_data = [sen_preprocessor(obj) for obj in object_entity]
 
-    if entity_flag:
-        new_sentence = sentence_processing(dataset)
-        dataset.sentence = new_sentence
-
-    if preprocessing_flag and mecab_flag:
-        out_dataset = pd.DataFrame({'id': dataset['id'],
-                                    'sentence': [mecab_processing(text_preprocessing(sent)) for sent in dataset['sentence']],
-                                    'subject_entity': [mecab_processing(text_preprocessing(entity)) for entity in subject_entity],
-                                    'object_entity': [mecab_processing(text_preprocessing(entity)) for entity in object_entity],
-                                    'label': dataset['label'], })
-        print('Finish preprocessing and mecab !!!')
-
-    elif preprocessing_flag and not mecab_flag:
-        out_dataset = pd.DataFrame({'id': dataset['id'],
-                                    'sentence': [text_preprocessing(sent) for sent in dataset['sentence']],
-                                    'subject_entity': [text_preprocessing(entity) for entity in subject_entity],
-                                    'object_entity': [text_preprocessing(entity) for entity in object_entity],
-                                    'label': dataset['label'], })
-        print('Finish data preprocessing!!!')
-
-    elif mecab_flag and not preprocessing_flag:
-        out_dataset = pd.DataFrame({'id': dataset['id'],
-                                    'sentence': [mecab_processing(sent) for sent in dataset['sentence']],
-                                    'subject_entity': [mecab_processing(entity) for entity in subject_entity],
-                                    'object_entity': [mecab_processing(entity) for entity in object_entity],
-                                    'label': dataset['label'], })
-        print('Finish mecab preprocessing!!!')
-    else:
-        out_dataset = pd.DataFrame({'id': dataset['id'],
-                                    'sentence': (dataset['sentence']),
-                                    'subject_entity': (subject_entity),
-                                    'object_entity': (object_entity),
-                                    'label': dataset['label'], })
-        print('None preprocessing')
-
+    out_dataset = pd.DataFrame({'id': dataset['id'],
+        'sentence': sen_data,
+        'subject_entity' : subject_data,
+        'object_entity' : object_data,
+        'label' : dataset['label']}
+    )
     return out_dataset
 
 
-def load_data(dataset_dir, entity_flag=0, preprocessing_flag=0, mecab_flag=0, model_type="big_sort"):
-    """ csv 파일을 경로에 맡게 불러 옵니다. """
+def load_data(dataset_dir, k_fold=0, val_ratio=0, train=True):
+    """ 
+        csv 파일을 경로에 맡게 불러 옵니다. 
+        k_fold와 val_ratio를 통해 train data와 validation data를 나눕니다.
+        단, k_fold가 우선순위고, k_fold가 없을 경우 val_ratio에 따라 split을 진행합니다.
+    """
+    dataset = pd.read_csv(dataset_dir)
+    if train == True:
+        dataset = dataset.drop_duplicates(['sentence', 'subject_entity', 'object_entity', 'label'], keep='first')
+        
+        # 라벨링이 다른 데이터 제거
+        dataset = dataset.drop(index=[6749, 8364, 22258, 277, 25094])
+        dataset = dataset.reset_index(drop=True)
+    
+    #datatype 변경
+    dataset['subject_entity'] = dataset.subject_entity.map(eval)
+    dataset['object_entity'] = dataset.object_entity.map(eval)
+    print(">>>>>>>>>>Finish pre processing loaded data(drop duplicated and miss-labeled data")
+
+    if k_fold > 0 and train == True: # train, split by kfold
+        return split_by_kfolds(dataset, k_fold)
+    elif val_ratio > 0: # train, split by val_ratio
+        return split_by_val_ratio(dataset,val_ratio)
+    elif train == False: #inference
+        return dataset
+    else: # train, not split
+        return [[dataset,None]]
+
+
+def split_by_kfolds(dataset, k_fold):
+    X = dataset.drop(["label"], axis=1)
+    y = dataset["label"]
+    skf = StratifiedKFold(n_splits=k_fold, shuffle=True)
+    return [[dataset.iloc[train_dset], dataset.iloc[val_dset]]  for train_dset, val_dset in skf.split(X,y)]
+
+
+def split_by_val_ratio(dataset,val_ratio):
+    data_size = len(dataset)
+    index_map = collections.defaultdict(list)
+    for idx in range(data_size):
+        label = dataset.iloc[idx]['label']
+        index_map[label].append(idx)
+    train_indices = []
+    val_indices = []
+
+    for label in index_map.keys():
+        idx_list = index_map[label]
+        val_size = int(len(idx_list) * val_ratio)
+
+        val_index = random.sample(idx_list, val_size)
+        train_index = list(set(idx_list) - set(val_index))
+
+        train_indices.extend(train_index)
+        val_indices.extend(val_index)
+
+    random.shuffle(train_indices)
+    random.shuffle(val_indices)
+    train_dset = dataset.iloc[train_indices]
+    val_dset = dataset.iloc[val_indices]
+    return [[train_dset, val_dset]]
+
+
+#### for mlm
+class MLM_Dataset(Dataset):
+    """ Masked Language Model Dataset 구성을 위한 class."""
+    def __init__(self, pair_dataset, tokenizer):
+        self.pair_dataset = pair_dataset
+        self.tokenizer = tokenizer
+
+    def __getitem__(self, idx):
+        item = {key: val[idx] for key, val in self.pair_dataset.items()}
+        inputs, labels = mask_tokens(item['input_ids'], self.tokenizer)
+        item['input_ids'] = inputs.squeeze()
+        # item['input_mask'] = inputs != 0
+        item['labels'] = labels.squeeze()
+        return item
+
+    def __len__(self):
+        return len(self.pair_dataset['input_ids'])
+
+
+def load_mlm_data(dataset_dir):
+    """ csv 파일을 경로에 맞게 불러 옵니다. """
     pd_dataset = pd.read_csv(dataset_dir)
     if 'train' in dataset_dir:
-        # 완전 중복 제거 42개
         pd_dataset = pd_dataset.drop_duplicates(
-            ['sentence', 'subject_entity', 'object_entity', 'label'], keep='first')
-        # 라벨링이 다른 데이터 제거
-        pd_dataset = pd_dataset.drop(index=[6749, 8364, 22258, 277, 25094])
-        pd_dataset = pd_dataset.reset_index(drop=True)
-        print("Finish remove duplicated data")
-    
-    if model_type=="per_sort":
-        pd_dataset=pd_dataset[pd_dataset['label'].str.contains('per')].reset_index(drop=True)
-    elif model_type=="org_sort":
-        pd_dataset=pd_dataset[pd_dataset['label'].str.contains('org')].reset_index(drop=True)
-        
+            ['sentence'], keep='first') # 중복되는 문장 제거
 
-    dataset = preprocessing_dataset(
-        pd_dataset, entity_flag, preprocessing_flag, mecab_flag)
-    return dataset
+    pd_dataset = pd.DataFrame({'id': pd_dataset['id'],
+                                'sentence': pd_dataset['sentence'],
+                                'label': pd_dataset['label'],
+                                })
+    return pd_dataset
 
 
-def tokenized_dataset(dataset, tokenizer, is_inference=False):
-    """ tokenizer에 따라 sentence를 tokenizing 합니다."""
-#     sentences = []
-#     questions = []
-#     for sen, e01, e02 in zip(dataset['sentence'], dataset['subject_entity'], dataset['object_entity']):
-#         sentences.append(sen)
-          
-#         아래의 question 둘 중 하나 선택    
-#         questions.append('◈ ' + e01 + '◈ 과 ↑ ' + e02 + ' ↑ 는 무슨 관계일까요?')
-#         questions.append('</e1> ' + e01 + '</e1> 과 </e2> ' + e02 + ' </e2> 는 무슨 관계일까요?')    
-#     tokenized_sentences = tokenizer(
-#         sentences,
-#         questions,
-#         return_tensors="pt",
-#         padding=True,
-#         truncation=True,
-#         max_length=256,
-#         add_special_tokens=True,
-#         return_token_type_ids=False
-#     )
-    concat_entity = []
-    for sen ,e01, e02 in zip(dataset['sentence'], dataset['subject_entity'], dataset['object_entity']):
-        temp = ''
-        temp = e01 + '[SEP]' + e02
-        concat_entity.append(temp)
+def mask_tokens(inputs, tokenizer, mlm_probability=0.15, pad=True):
+    inputs = torch.tensor(inputs)
+    labels = inputs.clone()
 
-       
+    # mlm_probability은 15%로 BERT에서 사용하는 확률
+    probability_matrix = torch.full(labels.shape, mlm_probability)
 
-    if is_inference:
-        """ Roberta TTI_flag """
-        if 'roberta' in tokenizer.name_or_path and not 'xlm' in tokenizer.name_or_path:
-            tokenized_sentences = tokenizer(
-                concat_entity,
-                list(dataset['sentence']),
-                return_tensors="pt",
-                padding=True,
-                truncation=True,
-                max_length=256,
-                add_special_tokens=True,
-                return_token_type_ids=False
-            )
-        else:
-            tokenized_sentences = tokenizer(
-                concat_entity,
-                list(dataset['sentence']),
-                return_tensors="pt",
-                padding=True,
-                truncation=True,
-                max_length=256,
-                add_special_tokens=True
-            )
+    special_tokens_mask = [
+        tokenizer.get_special_tokens_mask(labels.tolist(), already_has_special_tokens=True)
+    ]
+    probability_matrix.masked_fill_(torch.tensor(special_tokens_mask, dtype=torch.bool).squeeze(), value=0.0)
+
+    if tokenizer._pad_token is not None:
+        padding_mask = labels.eq(tokenizer.pad_token_id)
+        probability_matrix.masked_fill_(padding_mask, value=0.0)
+
+    masked_indices = torch.bernoulli(probability_matrix).bool()
+    labels[~masked_indices] = -100  # We only compute loss on masked tokens
+
+    # 80% of the time, we replace masked input tokens tokenizer.mask_token ([MASK])
+    indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
+    inputs[indices_replaced] = tokenizer.convert_tokens_to_ids(tokenizer.mask_token)
+
+    # 10% of the time, we replace masked input tokens with random word
+    indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).bool() & masked_indices & ~indices_replaced
+    random_words = torch.randint(len(tokenizer), labels.shape, dtype=torch.long)
+    inputs[indices_random] = random_words[indices_random]
+    return inputs, labels 
+ 71  model_ensemble.py 
+View full
+Viewed
+@@ -0,0 +1,71 @@
+from glob import glob
+import os
+import pickle as pickle
+import argparse
+
+import pandas as pd
+
+def num_to_label(label):
+    """
+      숫자로 되어 있던 class를 원본 문자열 라벨로 변환 합니다.
+    """
+    origin_label = []
+    with open('dict_num_to_label.pkl', 'rb') as f:
+        dict_num_to_label = pickle.load(f)
+    for v in label:
+        origin_label.append(dict_num_to_label[v])
+
+    return origin_label
+
+def select_csv(base_path):
+    csv_dir = base_path
+    # dirs = os.listdir(csv_dir)
+    dirs = glob(os.path.join(csv_dir, '*.csv'))
+    dirs = sorted(dirs)
+
+    for i, d in enumerate(dirs, 0):
+        dirs[i] = os.path.basename(d)
+        print("(%d) %s" % (i, dirs[i]))
+    idx_list = input("Select csv files you want to ensemble: ").split()
+
+    csv_lists = []
+    for index, file_idx in enumerate(idx_list, 1):
+        csv_file = os.path.abspath(
+            os.path.join(csv_dir, dirs[int(file_idx)]))
+        csv_lists.append(csv_file)
+        print("{:02d}_dir is: {}".format(index, csv_file))
+
+    return csv_lists
+
+def ensemble(args):
+    if args.dir == 'all':
+        csv_files = glob(f"./prediction/all/*.csv")
+        for index, csv_name in enumerate(csv_files, 1):
+            print("{:02d}_dir is: {}".format(index, os.path.basename(csv_name)))
     else:
-        """ Roberta TTI_flag """
-        if 'roberta' in tokenizer.name_or_path and not 'xlm' in tokenizer.name_or_path:
-            tokenized_sentences = tokenizer(
-                concat_entity,
-                list(dataset['sentence']),
-                truncation=True,
-                max_length=256,
-                add_special_tokens=True,
-                return_token_type_ids=False
-            )
-        else:
-            tokenized_sentences = tokenizer(
-                concat_entity,
-                list(dataset['sentence']),
-                truncation=True,
-                max_length=256,
-                add_special_tokens=True
-            )
+        csv_files = select_csv("./prediction")
 
-    return tokenized_sentences
+    for i, csv_file in enumerate(csv_files) :
+        df = pd.read_csv(csv_file)
+        if i == 0:
+            probs = pd.DataFrame(df.probs.map(eval).to_list())
+        else :
+            probs += pd.DataFrame(df.probs.map(eval).to_list())
+
+    probs = probs.div(probs.sum(axis=1), axis=0)
+    probs_argmax = probs.idxmax(axis=1).values.tolist()
+    pred_answer = num_to_label(probs_argmax)
+    output_prob = probs.values.tolist()
+
+    output = pd.DataFrame(
+        {'id': [i for i in range(7765)], 'pred_label': pred_answer, 'probs': output_prob, })
+    output.to_csv(f"./prediction/ensemble_{args.dir}.csv", index=False)
+
+
+if __name__=='__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dir', default='all', help='dir type(default: all)')
+    args = parser.parse_args()
+
+    ensemble(args)
+    print('Finish Ensemble !')

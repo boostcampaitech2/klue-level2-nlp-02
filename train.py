@@ -417,10 +417,10 @@ if __name__ == '__main__':
     parser.add_argument("--k_fold", type=int, default=0,
                         help='not k fold(defalut: 0)')
 
-    parser.add_argument('--aeda_flag', type=bool, default=False,
+    parser.add_argument('--aeda_flag', default=False, action='store_true',
                         help='Number of adea agmentations (default: 0)')
 
-    parser.add_argument('--augmentation_flag', type=bool, default=False,
+    parser.add_argument('--augmentation_flag', default=False, action='store_true',
                         help="data augmentation by resampling")
     
     parser.add_argument('--use_rtt', default=False, action='store_true',
@@ -434,7 +434,6 @@ if __name__ == '__main__':
                         help='if want, you have to enter your model class name (ConcatFourClsModel, AddFourClassifierRoberta, AddLayerNorm, Rroberta)')
         
     args = parser.parse_args()
-    args.model_name = args.model_name.lower()
 
     # Start
     seed_everything(args.seed)

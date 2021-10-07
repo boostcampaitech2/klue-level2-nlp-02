@@ -85,7 +85,6 @@ def augmentation_by_resampling(data):
     new_df = new_df.drop(['sbj_obj_entity_type','sbj_obj_entity_word'], axis=1)
     return new_df
 
-  
 def get_labels(data):
     return list(data.label.value_counts().index)
 

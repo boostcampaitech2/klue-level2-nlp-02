@@ -35,7 +35,7 @@ def tokenized_dataset(dataset, tokenizer, is_inference=False, is_mlm=False):
             tokenized_sentences = tokenizer(
                 concat_entity,
                 list(dataset['sentence']),
-                return_tensors="pt",
+                return_tensors='pt' if is_mlm else None,
                 padding=True if is_mlm else PaddingStrategy.DO_NOT_PAD.value,
                 truncation=True,
                 max_length=256,
@@ -46,7 +46,7 @@ def tokenized_dataset(dataset, tokenizer, is_inference=False, is_mlm=False):
             tokenized_sentences = tokenizer(
                 concat_entity,
                 list(dataset['sentence']),
-                return_tensors="pt",
+                return_tensors='pt' if is_mlm else None,
                 padding=True if is_mlm else PaddingStrategy.DO_NOT_PAD.value,
                 truncation=True,
                 max_length=256,
@@ -85,7 +85,7 @@ def tokenized_mlm_dataset(dataset, tokenizer, is_inference=False):
             tokenized_sentences = tokenizer(
                 list(dataset['sentence']),
                 return_tensors="pt",
-                padding=True, # dynamic_padding 사용하는데도 에러 발생 (mlm)
+                padding=True, # TO DO: dynamic_padding 사용하는데도 에러 발생 (mlm)
                 truncation=True,
                 max_length=256,
                 add_special_tokens=True,

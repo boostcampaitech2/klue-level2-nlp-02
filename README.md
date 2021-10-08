@@ -134,7 +134,7 @@ sh requirement_install.sh
 
 |argument  |description|default|
 |:------------:|:----------|:------|
-|--use_pem| 데이터 전처리 방식 선택 유무 |False|
+|use_pem| 데이터 전처리 방식 선택 유무 |False|
 
 
 ```
@@ -148,15 +148,15 @@ $ python train.py --PLM klue/roberta-large --wandb_unique_tag AddLayerNorm_lr_2e
 
 |argument  |description|default|
 |:------------:|:----------|:------|
-|--model_dir| 선택할 모델 경로 |./best_models|
-|--PLM | 모델 checkpoint |klue/bert-base|
-|--entity_flag | typed entity marker punct 사용 유무 |False|
-|--preprocessing_cmb|데이터 전처리 방식 선택(0: 특수 문자 제거, 1: 특수 문자 치환, 2: date 보정, 3: 한글 띄워주기)| set ex: 0 1 2 |
-|--mecab_flag | Mecab을 활용해 형태소를 분리 유무 | False |
-| --add_unk_token | unk token vocab에 저장한 tokenizer 사용 유무 | False |
-| --k_fold | Stratified K Fold 사용 | 0 |
-| --model_type | 대,소분류 진행 유무 | False |
-| --model_name | custom 모델 입력 | None |
+|model_dir| 선택할 모델 경로 |./best_models|
+|PLM | 모델 checkpoint |klue/bert-base|
+|entity_flag | typed entity marker punct 사용 유무 |False|
+|preprocessing_cmb|데이터 전처리 방식 선택(0: 특수 문자 제거, 1: 특수 문자 치환, 2: date 보정, 3: 한글 띄워주기)| set ex: 0 1 2 |
+|mecab_flag | Mecab을 활용해 형태소를 분리 유무 | False |
+| add_unk_token | unk token vocab에 저장한 tokenizer 사용 유무 | False |
+| k_fold | Stratified K Fold 사용 | 0 |
+| model_type | 대,소분류 진행 유무 | False |
+| model_name | custom 모델 입력 | None |
 
 ```
 $ python inference.py --PLM klue-roberta-large --k_fold 10 --entity_flag --preprocessing_cmb 0 1 2 --mecab_flag
@@ -170,7 +170,7 @@ $ python inference.py --PLM klue-roberta-large --k_fold 10 --entity_flag --prepr
 
 |argument  |description|default|
 |:------------:|:----------|:------|
-|--dir| 앙상블할 모델 경로 선택 |all|
+|dir| 앙상블할 모델 경로 선택 |all|
 
 ```
 $ python model_ensemble.py --dir all

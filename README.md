@@ -97,39 +97,66 @@ sh requirement_install.sh
 
 ### Training
 
-- MaskedLM 사전 학습 시 `train_mlm.py`
-    - arguments
-        - `--use_rtt` : Round-trip Translation 데이터를 이용해 MaskedLM Pre-training
-        - `--use_pem` : 데이터 전처리(preprocessing), 문장에 entity type 표시, mecab을 이용한 전처리 사용. 사용시 `--preprocessing_cmb` 와 함께 사용되어야 함
-        - `--preprocessing_cmb` : 데이터 전처리 방식 선택. `--use_pem` 를 함께 사용해야 적용됨
-- RE downstream task 학습 시 `train.py`
-    - `--preprocessing_cmb` : 데이터 전처리 방식 선택.
-    - `--entity_flag` : subject와 object에 Typed entity marker
-    - `--mecab_flag` : sentence를 Tokenizer에 태우기 전 Mecab을 활용해 형태소를 분리
-    - `--k_fold` : Train 시 Stratified k fold 적용
-    - 추가적인 Layer 쌓은 모델 사용 시 `--model_name AddFourClassifierRoberta` or `--model_name ConcatFourClsModel` or `--model_name AddLayerNorm`
-    - Rroberta 사용 시 `--model_name Rroberta` (Rroberta 사용시--entity_flag는 자동으로 True)
+#### Options-train.py
+
+|argument        |description|default|
+|:--------------:|:----------|:------|
+|save_dir|모델 저장 경로 설정| ./best_models|
+|PLM|사용할 모델 선택(checkpoint)|klue/bert-base|
+|MLM_checkpoint  | MLM 모델 불러오기 |./best_models/klue-roberta-large-rtt-pem-mlm|
+|entity_flag| typed entity marker punct 사용 | False |
+| use_mlm | MaskedLM pretrained model 사용 유무 | False |
+| epochs | train epoch 횟수 지정 | 3 |
+| lr | learning rate 지정 | 5e-5 |
+| train_batch_size | train batch size 설정 | 16 |
+| warmup_steps | warmup step 설정 | 500 |
+| weigth_decay | weight decay 설정 | 0.01 |
+| evaluatoin_stratgey   | evaluation_strategy 설정 | steps |
+| ignore_mismatched | pretrained model load 시, mismatched size 무시 유무 | False|
+| eval_flag | validation data 사용 유무 | False |
+| eval_ratio | evalation data size ratio 설정 | 0.2 |
+| seed | random seed 설정 | 2 |
+| dotenv_path | 사용자 env 파일 경로 설정   | /opt/ml/wandb.env |
+| wandb_unique_tag | wandb tag 설정 | bert-base-high-lr |
+| entity_flag | 사용자 env 파일 경로 설정   | False |
+| preprocessing_cmb | 데이터 전처리 방식 선택(0: 특수 문자 제거, 1: 특수 문자 치환, 2: date 보정, 3: 한글 띄워주기)| set ex: 0 1 2 |
+| mecab_flag | mecab을 활용한 형태소 분리 | False |
+| add_unk_token | unk token vocab에 저장 | False |
+| k_fold | Stratified K Fold 사용 | 0 |
+| adea_flag | adea 사용 유무 | False |
+| augmentation_flag | rtt augmentation dataset 사용 유무 | False |
+| model_type | 대,소분류 진행할 class 입력 | default |
+| model_name | custom 모델 입력 | None |
+
+#### Options-train_mlm.py
+
+**train.py의 --use_pem, --model_type 제외 동일**
+
+|argument  |description|default|
+|:------------:|:----------|:------|
+|--use_pem| 데이터 전처리 방식 선택 유무 |False|
+
 
 ```
 $ python train_mlm.py --PLM klue/roberta-large --use_pem --preprocessing_cmb 0 1 2 --use_rtt
-$ python train.py --PLM klue/roberta-large (작성해주세요 !!)
-$ python train.py --PLM klue/roberta-large --model_name Rroberta
+$ python train.py --PLM klue/roberta-large --wandb_unique_tag AddLayerNorm_lr_2e5_k_fold_10 --entity_flag --preprocessing_cmb 0 1 3 --mecab_flag --model_name AddLayerNorm --lr 2e-5 --k_fold 10
 ```
 
 ### Inference
 
-python inference.py 실행 후 모델 checkpoint 디렉토리를 선택해야 합니다.
+#### Options-inference.py
 
-- 사용할 수 있는 arguments
-    - `--model_dir` : model_dir: 모델의 위치
-    - `--PLM` : 모델 checkpoint
-    - `--entity_flag` : subject와 object에 Typed entity marker
-    - `--preprocessing_cmb` : 데이터 전처리 방식 선택.
-    - `--mecab_flag` : sentence를 Tokenizer에 태우기 전 Mecab을 활용해 형태소를 분리
-    - `--add_unk_token` : unk token을 분류하고 vocab에 add_token
-    - `--k_fold` : Train 시 Stratified k fold 적용
-    - `--model_name` : 사용자 정의 모델 이름
-    - `--model_type` : 사용할 class name 적어 custom model load
+|argument  |description|default|
+|:------------:|:----------|:------|
+|--model_dir| 선택할 모델 경로 |./best_models|
+|--PLM | 모델 checkpoint |klue/bert-base|
+|--entity_flag | typed entity marker punct 사용 유무 |False|
+|--preprocessing_cmb|데이터 전처리 방식 선택(0: 특수 문자 제거, 1: 특수 문자 치환, 2: date 보정, 3: 한글 띄워주기)| set ex: 0 1 2 |
+|--mecab_flag | Mecab을 활용해 형태소를 분리 유무 | False |
+| --add_unk_token | unk token vocab에 저장한 tokenizer 사용 유무 | False |
+| --k_fold | Stratified K Fold 사용 | 0 |
+| --model_type | 대,소분류 진행 유무 | False |
+| --model_name | custom 모델 입력 | None |
 
 ```
 $ python inference.py --PLM klue-roberta-large --k_fold 10 --entity_flag --preprocessing_cmb 0 1 2 --mecab_flag
@@ -139,8 +166,11 @@ $ python inference.py --PLM klue-roberta-large --k_fold 10 --entity_flag --prepr
 
 단일 모델(혹은 k-fold 모델)의 결과 csv 파일들에서 probs열을 soft-voting 하여 최종 ensemble 결과 csv를 생성합니다.
 
-- argument
-    - `--dir` : csv 파일의 이름을 결정하면서, 'all'인 경우 ./prediction/all 디렉토리 내의 모든 csv 파일을 ensemble
+#### Options-model_ensemble.py
+
+|argument  |description|default|
+|:------------:|:----------|:------|
+|--dir| 앙상블할 모델 경로 선택 |all|
 
 ```
 $ python model_ensemble.py --dir all

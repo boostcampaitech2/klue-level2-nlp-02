@@ -5,6 +5,12 @@ import collections
 from train import label_to_num
 
 def aeda(original_data):
+    """ADEA를 적용하는 함수입니다. DataFrame을 복사한 후 적용합니다.
+    Args:
+        original_data (pd.DataFrame): ADEA를 적용할 데이터셋
+    Returns:
+        pd.DataFrame: ADEA가 적용된 데이터셋
+    """    
     data = original_data.copy()
     new_sentence = []
     punctuations = ('.', ',', '!', '?', ';', ':')
@@ -38,14 +44,7 @@ def aeda(original_data):
         new_sentence.append(' '.join(splited_sentence))
     
     data.sentence = new_sentence
-    
     return data
-
-def aeda_dataset(dataset):
-    return aeda(dataset)
-    # dataset = pd.concat([dataset, aug_data])
-    # dataset = dataset.sample(frac=1, random_state=2).reset_index(drop=True)
-    # return dataset
 
 def augmentation_by_resampling(data):
     data = data.copy()
@@ -85,7 +84,6 @@ def augmentation_by_resampling(data):
     new_df = new_df.drop(['sbj_obj_entity_type','sbj_obj_entity_word'], axis=1)
     return new_df
 
-             
 def get_labels(data):
     return list(data.label.value_counts().index)
 
@@ -129,9 +127,6 @@ def augmentation(data,new_sb_ob_list, label,sbj_obj_type):
     target_data['replaced'] = new_sb_ob_list
     new_data = pd.DataFrame(list(target_data.apply(change_entity,axis=1).values))
     return new_data
-    # data = pd.concat([data, new_data])
-    # return data
-
 
 def change_entity(row):
     row = row.copy()
@@ -164,4 +159,4 @@ def change_entity(row):
             "label" : row["label"],
             "source" : row["source"],
             "sbj_obj_entity_type" : row["sbj_obj_entity_type"],
-            "sbj_obj_entity_word" : row["sbj_obj_entity_type"]}
+            "sbj_obj_entity_word" : row["sbj_obj_entity_word"]}

@@ -6,189 +6,277 @@ from typing import Dict, List, Tuple
 from tqdm import tqdm
 from konlpy.tag import Mecab
 
-""" 
-Roberta tokenizer 기준으로 unk token 줄이는 방향의 preprocessing
-다른 tokenizer에서 추가 기능이 필요하시면 말씀해주세요
 
-해당 전처리는 train, test에 동일하게 적용되어야함
-"""
+class SenPreprocessor:
+    def __init__(self, preprocessing_cmb, mecab_flag):
+        """
+        [summary]
+            문장을 전처리하는 클래스
 
-# Sentence Preprocessor
-class SenPreprocessor :
-    def __init__(self, preprocessing_cmb, mecab_flag) :
+        Args:
+            preprocessing_cmb : (list[int]) - 전처리를 사용할 항목들을 담은 리스트
+            mecab_flag : (bool) - mecab 전처리를 사용할 것인지 정하는 flag
+        """
+
         self.preprocessing_cmb = preprocessing_cmb
         self.mecab_flag = mecab_flag
-        if mecab_flag == 1 :
+        if mecab_flag == 1:
             self.mecab = Mecab()
-        
-    def __call__(self, sentence) :
-        """ argument에 따라 전처리 적용 """
-        if self.preprocessing_cmb != None :
-            if '0' in self.preprocessing_cmb :
+
+    def __call__(self, sentence):
+        if self.preprocessing_cmb != None:
+            if "0" in self.preprocessing_cmb:
                 sentence = self.remove_special_char(sentence)
-            if '1' in self.preprocessing_cmb :
+            if "1" in self.preprocessing_cmb:
                 sentence = self.substitution_special_char(sentence)
-            if '2' in self.preprocessing_cmb :
+            if "2" in self.preprocessing_cmb:
                 sentence = self.substitution_date(sentence)
-            if '3' in self.preprocessing_cmb :
+            if "3" in self.preprocessing_cmb:
                 sentence = self.add_space_char(sentence)
 
-        if self.mecab_flag == True :
+        if self.mecab_flag == True:
             sentence = self.mecab_processing(sentence)
 
         return sentence
 
     def remove_special_char(self, sentence):
-        """ 독일어, 사우디어, 라틴어 및 unk 특수문자 제거 """
-        sentence = re.sub(r'[À-ÿ]+','', sentence) # 독일어
-        sentence = re.sub(r'[\u0600-\u06FF]+','', sentence)  # 사우디어
-        sentence = re.sub(r'[\u00C0-\u02B0]+','', sentence)  # 라틴어
-        sentence = re.sub(r'[ß↔Ⓐب€☎☏±∞]+','', sentence)
+        """
+        [summary]
+            독일어, 사우디어, 라틴어 및 unk 특수문자 제거
+
+        Args:
+            sentence : (str) - 전처리 대상 문장
+
+        Return :
+            sentence : (str) - 전처리된 문장
+        """
+
+        sentence = re.sub(r"[À-ÿ]+", "", sentence)
+        sentence = re.sub(r"[\u0600-\u06FF]+", "", sentence)
+        sentence = re.sub(r"[\u00C0-\u02B0]+", "", sentence)
+        sentence = re.sub(r"[ß↔Ⓐب€☎☏±∞]+", "", sentence)
         return sentence
 
     def substitution_special_char(self, sentence):
-        """ unk 특수문자 비슷한 모양으로 치환 """
-        sentence = re.sub('–','─', sentence)
-        sentence = re.sub('⟪','《', sentence)
-        sentence = re.sub('⟫','》', sentence)
-        sentence = re.sub('･','・', sentence)
-        sentence = re.sub('µ','ℓ', sentence)
-        sentence = re.sub('®','㈜', sentence)
-        sentence = re.sub('～','㈜', sentence)
+        """
+        [summary]
+            unk를 발생하는 특수 문자 중에서 tokenizer에 있는 문자 중 유사한 문자로 변경
+
+        Args:
+            sentence : (str) - 전처리 대상 문장
+
+        Return :
+            sentence : (str) - 전처리된 문장
+        """
+
+        sentence = re.sub("–", "─", sentence)
+        sentence = re.sub("⟪", "《", sentence)
+        sentence = re.sub("⟫", "》", sentence)
+        sentence = re.sub("･", "・", sentence)
+        sentence = re.sub("µ", "ℓ", sentence)
+        sentence = re.sub("®", "㈜", sentence)
+        sentence = re.sub("～", "㈜", sentence)
         return sentence
 
     def add_space_char(self, sentence):
-        """ ','로 연결된 한글 띄어주기 """
+        """
+        [summary]
+            ','주위 띄어쓰기가 잘못된 부분 수정
+
+        Args:
+            sentence : (str) - 전처리 대상 문장
+
+        Return :
+            sentence : (str) - 전처리된 문장
+        """
+
         def add_space(match):
-            res_str = ', '.join(match.group().split(',')).rstrip()
+            res_str = ", ".join(match.group().split(",")).rstrip()
             return res_str
-        p = re.compile(r'([기-힣\w\-]+,)+[기-힣\w\-]+')
+
+        p = re.compile(r"([기-힣\w\-]+,)+[기-힣\w\-]+")
         sentence = p.sub(add_space, sentence)
         return sentence
 
     def substitution_date(self, sentence):
         """
-        기간 포맷팅 '-' => '~'
-        1223년 – => 1223년 ~ 
+        [summary]
+            기간을 의미하는 format을 통일하기
+
+        Args:
+            sentence : (str) - 전처리 대상 문장
+
+        Return :
+            sentence : (str) - 전처리된 문장
         """
+
         def sub_tibble(match):
-            res_str = re.sub('[–\-]', '~', match.group())
+            res_str = re.sub("[–\-]", "~", match.group())
             return res_str
+
         re_patterns = [
-            r'(\d{2,4}년\s*)(\d{1,2}[월|일]\s*)(\d{1,2}[월|일])\s*[–\-]',
-            r'(\d{2,4}년\s*)(\d{1,2}[월|일]\s*)\s*[–\-]',
-            r'(\d{2,4}년\s*)\s*[–\-]',
-            r'\((\d{4}[–\-]\d{2,4})\)'
+            r"(\d{2,4}년\s*)(\d{1,2}[월|일]\s*)(\d{1,2}[월|일])\s*[–\-]",
+            r"(\d{2,4}년\s*)(\d{1,2}[월|일]\s*)\s*[–\-]",
+            r"(\d{2,4}년\s*)\s*[–\-]",
+            r"\((\d{4}[–\-]\d{2,4})\)",
         ]
-    
+
         for re_pattern in re_patterns:
             p = re.compile(re_pattern)
             sentence = p.sub(sub_tibble, sentence)
         return sentence
 
     def mecab_processing(self, sentence):
+        """
+        [summary]
+            mecab을 이용해서 문장의 구조 변형
+
+        Args:
+            sentence : (str) - 전처리 대상 문장
+
+        Return :
+            sentence : (str) - 전처리된 문장
+        """
         tokens = self.mecab.morphs(sentence)
         mecab_sentence = " ".join(tokens)
         return mecab_sentence
 
+
 # UKN tokenizer 처리
-class UnkPreprocessor :
+class UnkPreprocessor:
     """
     tokenizer가 unk으로 분류하는 단어들 찾기 및 추가
     """
-    def __init__(self, tokenizer) :
+
+    def __init__(self, tokenizer):
         self.tokenizer = tokenizer
- 
-    def __call__(self, sent:List, sub:List, obj:List) :
-        print('-'*100)
-        print('before add unk, tokenizer count:', len(self.tokenizer.vocab.keys()))
-        print('sentence unknown token searching...')
+
+    def __call__(self, sent: List, sub: List, obj: List):
+        print("-" * 100)
+        print("before add unk, tokenizer count:", len(self.tokenizer.vocab.keys()))
+        print("sentence unknown token searching...")
         UNK_sentence_list = chain(*[self.UNK_word_and_chr(s) for s in tqdm(sent)])
 
         # for_add = [token for token, cnt in Counter(UNK_sentence_list).items() if cnt >= 10]
         for_add = [token for token, cnt in Counter(UNK_sentence_list).items()]
         print(for_add[:20])
 
-        print('entity unknown token searching...')
-        UNK_entity_list = chain(*[self.UNK_word_and_chr(w) for w in tqdm(sub+obj)])
+        print("entity unknown token searching...")
+        UNK_entity_list = chain(*[self.UNK_word_and_chr(w) for w in tqdm(sub + obj)])
         # for_add += [token for token, cnt in Counter(UNK_entity_list).items() if cnt >= 2]
         for_add += [token for token, cnt in Counter(UNK_entity_list).items()]
-        print('add unk example:', for_add[:20])
+        print("add unk example:", for_add[:20])
 
         for_add = list(set(for_add))
         added_token_num = self.tokenizer.add_tokens(for_add)
 
-        print('after add unk, toknizer count:', len(self.tokenizer.vocab.keys()))
-        print('added_token_num:', added_token_num)
+        print("after add unk, toknizer count:", len(self.tokenizer.vocab.keys()))
+        print("added_token_num:", added_token_num)
         return self.tokenizer, added_token_num
 
-    def UNK_word_and_chr(self, text:str) -> Tuple[List[str], List[str]]:
+    def UNK_word_and_chr(self, text: str) -> Tuple[List[str], List[str]]:
         """
         정규식을 이용하여 문장기호 띄어쓰기 및 split을 이용한UNK subword 찾기
         """
         sub_word_UNK_list = []
-        def add_space(match) :
+
+        def add_space(match):
             bracket = match.group()
-            added = ' ' + bracket + ' '
+            added = " " + bracket + " "
             return added
 
         p = re.compile(r'[\([)\]|,|-|~|-|‘|’|"|\']')
         words_list = p.sub(add_space, text).split()
-        for word in words_list :
+        for word in words_list:
             subwordpieces_ID_encoded = self.tokenizer.tokenize(word)
             Known_subword = self.subword_parsing(subwordpieces_ID_encoded)
-        
-            for sub_char, NK_char in zip(word, Known_subword) :
-                if sub_char != NK_char and len(word) == len(Known_subword) :
+
+            for sub_char, NK_char in zip(word, Known_subword):
+                if sub_char != NK_char and len(word) == len(Known_subword):
                     sub_word_UNK_list.append(sub_char)
-                elif sub_char != NK_char and len(word) != len(Known_subword) :
+                elif sub_char != NK_char and len(word) != len(Known_subword):
                     sub_word_UNK_list.append(word)
                     break
         return sub_word_UNK_list
 
-    
-    def subword_parsing(self, wordpiece:List) -> List[str]: 
+    def subword_parsing(self, wordpiece: List) -> List[str]:
         """subword # 제거용"""
         Known_char = []
-        for subword in wordpiece :
-            if subword == self.tokenizer.unk_token :
+        for subword in wordpiece:
+            if subword == self.tokenizer.unk_token:
                 Known_char.append(self.tokenizer.unk_token)
-            else :
-                string = subword.replace('#', '')
+            else:
+                string = subword.replace("#", "")
                 Known_char.extend(string)
         return Known_char
 
+
 # Typed Entity Marker
-class EntityPreprocessor :
-    def __init__(self, entity_flag) :
+class EntityPreprocessor:
+    def __init__(self, entity_flag):
         self.entity_flag = entity_flag
 
-    def __call__(self, dataset) :
-        if self.entity_flag :
+    def __call__(self, dataset):
+        if self.entity_flag:
             sen_preprocessed = self.preprocess(dataset)
             dataset.sentence = sen_preprocessed
         return dataset
 
-    def preprocess(self, data) :
+    def preprocess(self, data):
         new_sentence = []
         for idx in tqdm(range(len(data))):
             row = data.iloc[idx]
-            sentence, subject_entity, object_entity = row['sentence'], row['subject_entity'], row['object_entity']
-            sub_start_idx, sub_end_idx, sub_type = subject_entity['start_idx'], subject_entity['end_idx'], subject_entity['type']
-            ob_start_idx, ob_end_idx, ob_type = object_entity['start_idx'], object_entity['end_idx'], object_entity['type']
+            sentence, subject_entity, object_entity = (
+                row["sentence"],
+                row["subject_entity"],
+                row["object_entity"],
+            )
+            sub_start_idx, sub_end_idx, sub_type = (
+                subject_entity["start_idx"],
+                subject_entity["end_idx"],
+                subject_entity["type"],
+            )
+            ob_start_idx, ob_end_idx, ob_type = (
+                object_entity["start_idx"],
+                object_entity["end_idx"],
+                object_entity["type"],
+            )
 
             if sub_start_idx < ob_start_idx:
-                sentence = sentence[:sub_start_idx] + ' @ ◈ ' + sub_type + ' ◈ ' + sentence[sub_start_idx:sub_end_idx+1] + ' @ ' + \
-                    sentence[sub_end_idx+1:ob_start_idx] + ' # ↑ ' + ob_type + ' ↑ ' + \
-                    sentence[ob_start_idx:ob_end_idx+1] + ' # ' + sentence[ob_end_idx+1:]
+                sentence = (
+                    sentence[:sub_start_idx]
+                    + " @ ◈ "
+                    + sub_type
+                    + " ◈ "
+                    + sentence[sub_start_idx : sub_end_idx + 1]
+                    + " @ "
+                    + sentence[sub_end_idx + 1 : ob_start_idx]
+                    + " # ↑ "
+                    + ob_type
+                    + " ↑ "
+                    + sentence[ob_start_idx : ob_end_idx + 1]
+                    + " # "
+                    + sentence[ob_end_idx + 1 :]
+                )
             else:
-                sentence = sentence[:ob_start_idx] + ' # ↑ ' + ob_type + ' ↑ ' + sentence[ob_start_idx:ob_end_idx+1] + ' # ' + \
-                    sentence[ob_end_idx +1:sub_start_idx] + ' @ ◈ ' + sub_type + ' ◈ ' + \
-                    sentence[sub_start_idx:sub_end_idx+1] + ' @ ' + sentence[sub_end_idx+1:]
-                
-            sentence = re.sub('\s+', " ", sentence)
+                sentence = (
+                    sentence[:ob_start_idx]
+                    + " # ↑ "
+                    + ob_type
+                    + " ↑ "
+                    + sentence[ob_start_idx : ob_end_idx + 1]
+                    + " # "
+                    + sentence[ob_end_idx + 1 : sub_start_idx]
+                    + " @ ◈ "
+                    + sub_type
+                    + " ◈ "
+                    + sentence[sub_start_idx : sub_end_idx + 1]
+                    + " @ "
+                    + sentence[sub_end_idx + 1 :]
+                )
+
+            sentence = re.sub("\s+", " ", sentence)
             new_sentence.append(sentence)
-        
+
         print("Finish type entity processing!!!")
         return new_sentence
-

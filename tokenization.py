@@ -31,6 +31,10 @@ def tokenized_dataset(dataset, tokenizer, is_inference=False, is_mlm=False):
 
 def tokenized_mlm_dataset(dataset, tokenizer):
     """ tokenizer에 따라 sentence를 tokenizing 합니다."""
+    ''' 문영기 멘토님
+    위의 코드와 기능이 다른 것인데, 주석은 같습니다. 
+    차이를 추가해서 작성해주시면 좋을 것 같습니다.
+    '''
     if 'roberta' in tokenizer.name_or_path and not 'xlm' in tokenizer.name_or_path:
         tokenized_sentences = tokenizer(
             list(dataset['sentence']),

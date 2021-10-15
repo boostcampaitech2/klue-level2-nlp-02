@@ -19,7 +19,7 @@ from transformers import (
     BertTokenizer,
     DataCollatorWithPadding,
 )
-from load_data import RE_Dataset, rDatasetForRRoBERTa, load_data, preprocessing_dataset
+from load_data import RE_Dataset, DatasetForRRoBERTa, load_data, preprocessing_dataset
 from pathlib import Path
 
 import wandb

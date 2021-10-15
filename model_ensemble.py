@@ -19,34 +19,10 @@ def num_to_label(label):
     return origin_label
 
 
-def select_csv(base_path):
-    csv_dir = base_path
-    dirs = glob(os.path.join(csv_dir, "*.csv"))
-    dirs = sorted(dirs)
-
-    for i, d in enumerate(dirs, 0):
-        dirs[i] = os.path.basename(d)
-        print("(%d) %s" % (i, dirs[i]))
-    idx_list = input("Select csv files you want to ensemble: ").split()
-    """ 문영기 멘토님
-    미리 argument로 받는 것이 좋지 않았을까요?
-    """
-    csv_lists = []
-    for index, file_idx in enumerate(idx_list, 1):
-        csv_file = os.path.abspath(os.path.join(csv_dir, dirs[int(file_idx)]))
-        csv_lists.append(csv_file)
-        print("{:02d}_dir is: {}".format(index, csv_file))
-
-    return csv_lists
-
-
-def ensemble(args):
-    if args.dir == "all":
-        csv_files = glob(f"./prediction/all/*.csv")
-        for index, csv_name in enumerate(csv_files, 1):
-            print("{:02d}_dir is: {}".format(index, os.path.basename(csv_name)))
-    else:
-        csv_files = select_csv("./prediction")
+def ensemble():
+    csv_files = glob(f"./prediction/all/*.csv")
+    for index, csv_name in enumerate(csv_files, 1):
+        print("{:02d}_dir is: {}".format(index, os.path.basename(csv_name)))
 
     for i, csv_file in enumerate(csv_files):
         df = pd.read_csv(csv_file)
@@ -67,13 +43,9 @@ def ensemble(args):
             "probs": output_prob,
         }
     )
-    output.to_csv(f"./prediction/ensemble_{args.dir}.csv", index=False)
+    output.to_csv(f"./prediction/ensemble.csv", index=False)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--dir", default="all", help="dir type(default: all)")
-    args = parser.parse_args()
-
-    ensemble(args)
+    ensemble()
     print("Finish Ensemble !")

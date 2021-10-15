@@ -20,8 +20,10 @@ class FCLayer(nn.Module):
 
 
 class Rroberta(RobertaPreTrainedModel):
-    """r-bert의 paper 주소를 같이 넣어주셔도 좋습니다. - 문영기 멘토님
-    r-bert 개념을 roberta에 적용.
+    """
+    R-BERT paper: https://arxiv.org/abs/1905.08284
+
+    R-BERT 개념을 RoBERTa에 적용.
     subject, object에 해당하는 각각의 entity hidden state를 평균,
     FC layer를 거친 뒤 cls vector와 concatenation하여 softmax.
     return : (loss), logits, (hidden_states), (attentions)

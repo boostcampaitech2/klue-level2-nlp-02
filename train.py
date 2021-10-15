@@ -19,7 +19,7 @@ from transformers import (
     BertTokenizer,
     DataCollatorWithPadding,
 )
-from load_data import RE_Dataset, rr_RE_Dataset, load_data, preprocessing_dataset
+from load_data import RE_Dataset, rDatasetForRRoBERTa, load_data, preprocessing_dataset
 from pathlib import Path
 
 import wandb
@@ -253,7 +253,7 @@ def main(args):
         RE_train_dataset = (
             RE_Dataset(tokenized_train, train_label)
             if args.model_name != "Rroberta"
-            else r_RE_Dataset(tokenized_train, train_label, tokenizer)
+            else DatasetForRRoBERTa(tokenized_train, train_label, tokenizer)
         )
 
         # eval set이 없으면 RE_dev_dataset에 RE_train_dataset 복사하여 사용
@@ -267,7 +267,7 @@ def main(args):
             RE_dev_dataset = (
                 RE_Dataset(tokenized_test, test_label)
                 if args.model_name != "Rroberta"
-                else r_RE_Dataset(tokenized_test, test_label, tokenizer)
+                else DatasetForRRoBERTa(tokenized_test, test_label, tokenizer)
             )
         else:
             RE_dev_dataset = RE_train_dataset
@@ -309,10 +309,6 @@ def train_model(
     added_token_num,
     model_type,
 ):
-    """문영기 멘토님
-    타입힌트를 넣어주시면 코드를 읽기가 더 쉽고 좋습니다.
-    """
-
     RE_CUSTOM_Model = None
 
     if args.model_name is not None:

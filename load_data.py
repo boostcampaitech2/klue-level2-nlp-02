@@ -26,8 +26,9 @@ class RE_Dataset(Dataset):
         return len(self.labels)
 
 
-class r_RE_Dataset(RE_Dataset):
-    """rRobert도 그렇고. .r_RE_Dataset이 무엇입니까..ㅠㅠ - 문영기 멘토님
+class DatasetForRRoBERTa(RE_Dataset):
+    """
+    R-RoBERTa 모델을 사용하기 위해 커스텀한 Relation Extraction Dataset
     subject, object entity embedding을 만들어주기 위한 클래스
     subject : e1_mask
     object : e2_mask
@@ -71,7 +72,9 @@ class r_RE_Dataset(RE_Dataset):
 
 
 def preprocessing_dataset(dataset, sen_preprocessor, entity_preprocessor):
-    """처음 불러온 csv 파일을 원하는 형태의 DataFrame으로 변경 시켜줍니다."""
+    """
+    처음 불러온 csv 파일을 원하는 형태의 DataFrame으로 변경 시켜줍니다.
+    """
 
     subject_entity, object_entity = list(
         zip(
@@ -178,7 +181,9 @@ def split_by_val_ratio(dataset, val_ratio):
 
 #### for mlm
 class MLM_Dataset(Dataset):
-    """Masked Language Model Dataset 구성을 위한 class."""
+    """
+    Masked Language Model Dataset 구성을 위한 class
+    """
 
     def __init__(self, dataset, tokenizer):
         self.dataset = dataset
@@ -196,7 +201,10 @@ class MLM_Dataset(Dataset):
 
 
 def load_mlm_data(dataset_dir):
-    """csv 파일을 경로에 맞게 불러 옵니다."""
+    """
+    csv 파일을 경로에 맞게 불러 오고
+    중복되는 문장을 제거합니다.
+    """
     pd_dataset = pd.read_csv(dataset_dir)
     if "train" in dataset_dir:
         pd_dataset = pd_dataset.drop_duplicates(

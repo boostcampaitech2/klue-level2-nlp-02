@@ -147,6 +147,9 @@ orgs_id_index = {0: 1, 1: 2, 2: 3, 3: 5, 4: 7, 5: 9, 6: 18, 7: 19, 8: 20, 9: 22,
 
 
 def inference_three_step(model_dir, Re_test_dataset, device, args, is_roberta):
+    """
+    대분류(no_relation, org, per 분류) -> 소분류(per 관련 label 세부 분류), 소분류(org 관련 label 세부 분류) 진행
+    """
     dataloader = DataLoader(Re_test_dataset, batch_size=16, shuffle=False)
 
     dirs = os.listdir(model_dir)
@@ -365,7 +368,7 @@ def main(args):
     Re_test_dataset = (
         RE_Dataset(test_dataset, test_label)
         if args.model_name != "Rroberta"
-        else r_RE_Dataset(test_dataset, test_label, tokenizer)
+        else DatasetForRRoBERTa(test_dataset, test_label, tokenizer)
     )
 
     if args.model_type:

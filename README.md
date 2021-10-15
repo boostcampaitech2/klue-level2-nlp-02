@@ -182,27 +182,27 @@ $ python model_ensemble.py --dir all
 
    1. Model 1
 
-      ![스크린샷 2021-10-08 오전 10.59.06.png](https://s3.us-west-2.amazonaws.com/secure.notion-static.com/2686f3c1-33a9-4826-b8d2-98dd75d31ab4/%EC%8A%A4%ED%81%AC%EB%A6%B0%EC%83%B7_2021-10-08_%EC%98%A4%EC%A0%84_10.59.06.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAT73L2G45O3KS52Y5%2F20211008%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20211008T043041Z&X-Amz-Expires=86400&X-Amz-Signature=739a2e59cdd77d8107c4355c133c99b98961838ae453a8a31e085b4604ef8c62&X-Amz-SignedHeaders=host&response-content-disposition=filename%20%3D%22%25EC%258A%25A4%25ED%2581%25AC%25EB%25A6%25B0%25EC%2583%25B7%25202021-10-08%2520%25EC%2598%25A4%25EC%25A0%2584%252010.59.06.png%22)
+      ![스크린샷 2021-10-08 오전 10.59.06.png](./assets/model1.png)
 
    2. Model 2
 
-      ![스크린샷 2021-10-08 오전 11.00.00.png](https://s3.us-west-2.amazonaws.com/secure.notion-static.com/7426081d-0ba4-4a72-8d41-b0ead6c06ecf/%EC%8A%A4%ED%81%AC%EB%A6%B0%EC%83%B7_2021-10-08_%EC%98%A4%EC%A0%84_11.00.00.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAT73L2G45O3KS52Y5%2F20211008%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20211008T043433Z&X-Amz-Expires=86400&X-Amz-Signature=0dc056c691ccd07f8a81c5a2193103449b777f6fe8010e7378d68ab4eed0764a&X-Amz-SignedHeaders=host&response-content-disposition=filename%20%3D%22%25EC%258A%25A4%25ED%2581%25AC%25EB%25A6%25B0%25EC%2583%25B7%25202021-10-08%2520%25EC%2598%25A4%25EC%25A0%2584%252011.00.00.png%22)
+      ![스크린샷 2021-10-08 오전 11.00.00.png](./assets/model2.png)
 
    3. Model 3
 
-      ![스크린샷 2021-10-08 오전 11.00.27.png](https://s3.us-west-2.amazonaws.com/secure.notion-static.com/953e0b67-1e1c-452e-8881-1e9df078b0ae/%EC%8A%A4%ED%81%AC%EB%A6%B0%EC%83%B7_2021-10-08_%EC%98%A4%EC%A0%84_11.00.27.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAT73L2G45O3KS52Y5%2F20211008%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20211008T043537Z&X-Amz-Expires=86400&X-Amz-Signature=69f836f5af693aa87e7469c82ce8c525b7011f2a31413d41aa01cc95d76a1ee2&X-Amz-SignedHeaders=host&response-content-disposition=filename%20%3D%22%25EC%258A%25A4%25ED%2581%25AC%25EB%25A6%25B0%25EC%2583%25B7%25202021-10-08%2520%25EC%2598%25A4%25EC%25A0%2584%252011.00.27.png%22)
+      ![스크린샷 2021-10-08 오전 11.00.27.png](./assets/model3.png)
 
    4. Model 4
 
-      ![스크린샷 2021-10-08 오전 11.00.48.png](https://s3.us-west-2.amazonaws.com/secure.notion-static.com/d86689bb-8896-41dc-be7b-46f1a78faee5/%EC%8A%A4%ED%81%AC%EB%A6%B0%EC%83%B7_2021-10-08_%EC%98%A4%EC%A0%84_11.00.48.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAT73L2G45O3KS52Y5%2F20211008%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20211008T043609Z&X-Amz-Expires=86400&X-Amz-Signature=1d6e89bf105e5cf92b32acef19fe7400edddc3da87b3d2cbc9a58a47c5807e0d&X-Amz-SignedHeaders=host&response-content-disposition=filename%20%3D%22%25EC%258A%25A4%25ED%2581%25AC%25EB%25A6%25B0%25EC%2583%25B7%25202021-10-08%2520%25EC%2598%25A4%25EC%25A0%2584%252011.00.48.png%22)
+      ![스크린샷 2021-10-08 오전 11.00.48.png](./assets/model4.png)
 
    5. Model 5
 
-![스크린샷 2021-10-08 오전 11.02.01.png](https://s3.us-west-2.amazonaws.com/secure.notion-static.com/a0840bc8-cf4f-4a62-b4a7-f2ed95ec67a2/%EC%8A%A4%ED%81%AC%EB%A6%B0%EC%83%B7_2021-10-08_%EC%98%A4%EC%A0%84_11.02.01.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAT73L2G45O3KS52Y5%2F20211008%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20211008T043640Z&X-Amz-Expires=86400&X-Amz-Signature=7a8c818fd06c4bc95c9ed04d14dcfad4f52463cdfd203f5d9a53173d13cfeb44&X-Amz-SignedHeaders=host&response-content-disposition=filename%20%3D%22%25EC%258A%25A4%25ED%2581%25AC%25EB%25A6%25B0%25EC%2583%25B7%25202021-10-08%2520%25EC%2598%25A4%25EC%25A0%2584%252011.02.01.png%22)
+      ![스크린샷 2021-10-08 오전 11.00.48.png](./assets/model5.png)
 
 1. Model Ensemble
 
-   ![스크린샷 2021-10-08 오전 11.02.36.png](https://s3.us-west-2.amazonaws.com/secure.notion-static.com/7fa47087-1c91-46a0-8ec0-299b63f7235c/%EC%8A%A4%ED%81%AC%EB%A6%B0%EC%83%B7_2021-10-08_%EC%98%A4%EC%A0%84_11.02.36.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAT73L2G45O3KS52Y5%2F20211008%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20211008T043749Z&X-Amz-Expires=86400&X-Amz-Signature=540cef97c69524bc78f0d85f434dc54df698e4c5c61414548e3a0b1075baef0a&X-Amz-SignedHeaders=host&response-content-disposition=filename%20%3D%22%25EC%258A%25A4%25ED%2581%25AC%25EB%25A6%25B0%25EC%2583%25B7%25202021-10-08%2520%25EC%2598%25A4%25EC%25A0%2584%252011.02.36.png%22)
+   ![스크린샷 2021-10-08 오전 11.02.36.png](./assets/ensemble.png)
 
 ## Result
 

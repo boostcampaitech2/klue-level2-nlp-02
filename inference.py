@@ -23,19 +23,6 @@ from tokenization import *
 
 
 def inference(model, tokenized_sent, device, args, is_roberta=False):
-    """
-    [summary]
-       test dataset을 DataLoader로 만들어 준 후, batch_size로 나눠 model이 예측.
-
-    Args:
-        model: SequenceClassification model
-        tokenized_sent: 토큰화된 test dataset
-        is_roberta: roberta 관련 모델 사용 여부
-
-    Returns:
-        final_output_pred: 최종 label 예측값
-        final_output_prob: 최종 probability 예측값
-    """
     dataloader = DataLoader(tokenized_sent, batch_size=16, shuffle=False)
     model.eval()
 
@@ -76,19 +63,6 @@ def inference(model, tokenized_sent, device, args, is_roberta=False):
 
 
 def inference_ensemble(model_dir, tokenized_sent, device, args, is_roberta=False):
-    """
-    [summary]
-    모델 경로에 있는 모델들을 앙상블(soft voting)
-
-    Args:
-        model_dir: 모델 경로
-        tokenized_sent: 토큰화된 test dataset
-        is_roberta: roberta 관련 모델 사용 유무 flag
-    Returns:
-        final_output_pred: 최종 label 예측값
-        final_output_prob: 최종 probability 예측값
-
-    """
     dataloader = DataLoader(tokenized_sent, batch_size=16, shuffle=False)
 
     dirs = os.listdir(model_dir)
@@ -173,20 +147,6 @@ orgs_id_index = {0: 1, 1: 2, 2: 3, 3: 5, 4: 7, 5: 9, 6: 18, 7: 19, 8: 20, 9: 22,
 
 
 def inference_three_step(model_dir, Re_test_dataset, device, args, is_roberta):
-    """
-    [summary]
-       대분류(no_relation, org, per) 분류 -> 소분류(per관련 label 세부 분류, org관련 label 세부 분류)
-
-    Args:
-        model_dir: 모델 경로
-        Re_test_dataset: 토큰화된 test dataset
-        is_roberta ([bool]): roberta 관련 모델 사용 유무 flag
-
-    Returns:
-        final_output_pred: 최종 label 예측값
-        final_output_prob: 최종 probability 예측값
-
-    """
     dataloader = DataLoader(Re_test_dataset, batch_size=16, shuffle=False)
 
     dirs = os.listdir(model_dir)

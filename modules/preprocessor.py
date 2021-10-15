@@ -9,15 +9,6 @@ from konlpy.tag import Mecab
 
 class SenPreprocessor:
     def __init__(self, preprocessing_cmb, mecab_flag):
-        """
-        [summary]
-            문장을 전처리하는 클래스
-
-        Args:
-            preprocessing_cmb : (list[int]) - 전처리를 사용할 항목들을 담은 리스트
-            mecab_flag : (bool) - mecab 전처리를 사용할 것인지 정하는 flag
-        """
-
         self.preprocessing_cmb = preprocessing_cmb
         self.mecab_flag = mecab_flag
         if mecab_flag == 1:
@@ -40,17 +31,6 @@ class SenPreprocessor:
         return sentence
 
     def remove_special_char(self, sentence):
-        """
-        [summary]
-            독일어, 사우디어, 라틴어 및 unk 특수문자 제거
-
-        Args:
-            sentence : (str) - 전처리 대상 문장
-
-        Return :
-            sentence : (str) - 전처리된 문장
-        """
-
         sentence = re.sub(r"[À-ÿ]+", "", sentence)
         sentence = re.sub(r"[\u0600-\u06FF]+", "", sentence)
         sentence = re.sub(r"[\u00C0-\u02B0]+", "", sentence)
@@ -58,17 +38,6 @@ class SenPreprocessor:
         return sentence
 
     def substitution_special_char(self, sentence):
-        """
-        [summary]
-            unk를 발생하는 특수 문자 중에서 tokenizer에 있는 문자 중 유사한 문자로 변경
-
-        Args:
-            sentence : (str) - 전처리 대상 문장
-
-        Return :
-            sentence : (str) - 전처리된 문장
-        """
-
         sentence = re.sub("–", "─", sentence)
         sentence = re.sub("⟪", "《", sentence)
         sentence = re.sub("⟫", "》", sentence)
@@ -79,17 +48,6 @@ class SenPreprocessor:
         return sentence
 
     def add_space_char(self, sentence):
-        """
-        [summary]
-            ','주위 띄어쓰기가 잘못된 부분 수정
-
-        Args:
-            sentence : (str) - 전처리 대상 문장
-
-        Return :
-            sentence : (str) - 전처리된 문장
-        """
-
         def add_space(match):
             res_str = ", ".join(match.group().split(",")).rstrip()
             return res_str
@@ -99,17 +57,6 @@ class SenPreprocessor:
         return sentence
 
     def substitution_date(self, sentence):
-        """
-        [summary]
-            기간을 의미하는 format을 통일하기
-
-        Args:
-            sentence : (str) - 전처리 대상 문장
-
-        Return :
-            sentence : (str) - 전처리된 문장
-        """
-
         def sub_tibble(match):
             res_str = re.sub("[–\-]", "~", match.group())
             return res_str
@@ -127,16 +74,6 @@ class SenPreprocessor:
         return sentence
 
     def mecab_processing(self, sentence):
-        """
-        [summary]
-            mecab을 이용해서 문장의 구조 변형
-
-        Args:
-            sentence : (str) - 전처리 대상 문장
-
-        Return :
-            sentence : (str) - 전처리된 문장
-        """
         tokens = self.mecab.morphs(sentence)
         mecab_sentence = " ".join(tokens)
         return mecab_sentence

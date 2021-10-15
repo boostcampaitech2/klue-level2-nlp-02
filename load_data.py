@@ -7,7 +7,9 @@ from sklearn.model_selection import StratifiedKFold
 
 
 class RE_Dataset(Dataset):
-    """Dataset 구성을 위한 class."""
+    """
+    Relation Extraction Dataset 구성을 위한 class
+    """
 
     def __init__(self, dataset, labels):
         self.dataset = dataset
@@ -31,15 +33,15 @@ class r_RE_Dataset(RE_Dataset):
     object : e2_mask
     """
 
-    def __init__(self, pair_dataset, labels, tokenizer):
-        self.pair_dataset = pair_dataset
+    def __init__(self, dataset, labels, tokenizer):
+        self.dataset = dataset
         self.labels = labels
 
         self.sub_id = tokenizer.get_vocab()["◈"]
         self.obj_id = tokenizer.get_vocab()["↑"]
 
     def __getitem__(self, idx):
-        item = {key: val[idx] for key, val in self.pair_dataset.items()}
+        item = {key: val[idx] for key, val in self.dataset.items()}
         item["labels"] = torch.tensor(self.labels[idx])
 
         sub_flag, obj_flag = 0, 0
@@ -178,19 +180,19 @@ def split_by_val_ratio(dataset, val_ratio):
 class MLM_Dataset(Dataset):
     """Masked Language Model Dataset 구성을 위한 class."""
 
-    def __init__(self, pair_dataset, tokenizer):
-        self.pair_dataset = pair_dataset
+    def __init__(self, dataset, tokenizer):
+        self.dataset = dataset
         self.tokenizer = tokenizer
 
     def __getitem__(self, idx):
-        item = {key: val[idx] for key, val in self.pair_dataset.items()}
+        item = {key: val[idx] for key, val in self.dataset.items()}
         inputs, labels = mask_tokens(item["input_ids"], self.tokenizer)
         item["input_ids"] = inputs.squeeze()
         item["labels"] = labels.squeeze()
         return item
 
     def __len__(self):
-        return len(self.pair_dataset["input_ids"])
+        return len(self.dataset["input_ids"])
 
 
 def load_mlm_data(dataset_dir):

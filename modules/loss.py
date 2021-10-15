@@ -4,10 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-
 class FocalLoss(nn.Module):
-    def __init__(self, weight=None,
-                 gamma=2., reduction='mean'):
+    def __init__(self, weight=None, gamma=2.0, reduction="mean"):
         nn.Module.__init__(self)
         self.weight = weight
         self.gamma = gamma
@@ -20,11 +18,12 @@ class FocalLoss(nn.Module):
             ((1 - prob) ** self.gamma) * log_prob,
             target_tensor,
             weight=self.weight,
-            reduction=self.reduction
+            reduction=self.reduction,
         )
 
 
 # 대분류 시(big_sort), smoothing 0.3 ~ 0.5 사이가 적당할 듯함
+
 
 class LabelSmoothingLoss(nn.Module):
     def __init__(self, classes=11, smoothing=0.3, dim=-1):
@@ -42,12 +41,10 @@ class LabelSmoothingLoss(nn.Module):
             true_dist.scatter_(1, target.data.unsqueeze(1), self.confidence)
         return torch.mean(torch.sum(-true_dist * pred, dim=self.dim))
 
-# # F1Loss 작성중 ##
 
-###################
-criterion = {'label_smoothing': LabelSmoothingLoss, 'focal_loss': FocalLoss}
+criterion = {"label_smoothing": LabelSmoothingLoss, "focal_loss": FocalLoss}
 
 ## 원하는 criterion loss 사용!
 def use_criterion(criterion_n, **kwargs):
-    choose_criterion=criterion[criterion_n]
+    choose_criterion = criterion[criterion_n]
     return choose_criterion(**kwargs)

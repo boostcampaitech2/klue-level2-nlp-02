@@ -1,6 +1,6 @@
 # Pstage_02_KLUE
 
-Solution for KLUE Competitions in 2nd BoostCamp AI Tech 2기 by **메타몽팀 (2조)**
+Solution for KLUE Competitions in 2nd BoostCamp AI Tech by **메타몽팀 (2조)**
 
 ## Content
 
